@@ -587,6 +587,9 @@ MODULE W3GRIDMD
        IY2, J, JJ, IXR(4), IYR(4), ISEAI(4),&
        IST, NKI, NTHI, NRIC, NRIS, I, IDFT, &
        NSTAT, NBT, NLAND, NOSW, NMAPB, IMAPB
+#ifdef W3_ASCII
+  INTEGER                  :: NDSMA
+#endif
 #ifdef W3_NL2
   INTEGER            :: IDEPTH
 #endif
@@ -837,7 +840,7 @@ MODULE W3GRIDMD
   !
 #ifdef W3_ST4
   INTEGER                 :: SWELLFPAR, SDSISO, SDSBRFDF, SINTABLE,&
-                             TAUWBUG, VISCSTRESS
+                             TAUWBUG
   REAL 		   :: SDSBCHOICE
   REAL                    :: ZWND, ALPHA0, Z0MAX, BETAMAX, SINTHP,&
        ZALP, Z0RAT, TAUWSHELTER, SWELLF,    &
@@ -854,7 +857,7 @@ MODULE W3GRIDMD
        SDSBM0, SDSBM1, SDSBM2, SDSBM3,      &
        SDSBM4, SDSFACMTF, SDSCUMP,  SDSNUW, &
        SDSL, SDSMWD, SDSMWPOW, SPMSS, SDSNMTF, SINTAIL1, SINTAIL2, &
-       CUMSIGP
+       CUMSIGP, VISCSTRESS
 #endif
   !
 #ifdef W3_ST6
@@ -5953,9 +5956,16 @@ CONTAINS
     !10.  Write model definition file.
     !
     WRITE (NDSO,999)
-    CALL W3IOGR ( 'WRITE', NDSM )
+    CALL W3IOGR ( 'WRITE', NDSM &
+#ifdef W3_ASCII
+                  ,NDSA=NDSMA        &
+#endif
+            )
     !
     CLOSE (NDSM)
+#ifdef W3_ASCII
+    CLOSE (NDSMA)
+#endif
     !
     GOTO 2222
     !
