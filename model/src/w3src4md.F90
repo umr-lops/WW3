@@ -39,6 +39,7 @@ MODULE W3SRC4MD
   !/    02-Sep-2011 : Clean up and time optimization      ( version 4.04 )
   !/    04-Sep-2011 : Estimation of whitecap stats.       ( version 4.04 )
   !/    13-Nov-2013 : Reduced frequency range with IG     ( version 4.13 )
+  !/    01-Mar-2023 : Clean up of SDS4                    ( version 7.14 )
   !/
   !  1. Purpose :
   !
@@ -303,8 +304,8 @@ CONTAINS
         AMAX   = MAX ( AMAX , A(ITH,IK) )
       END DO
     END DO
-
-    DLWMEAN=ATAN2(ELSN,ELCS);
+    !
+    DLWMEAN=ATAN2(ELSN,ELCS)
     !
     ! 2.  Integrate over directions -------------------------------------- *
     !
@@ -510,7 +511,7 @@ CONTAINS
     USE W3GDATMD, ONLY: NK, NTH, NSPEC, DDEN, SIG, SIG2, TH,         &
          ESIN, ECOS, EC2, ZZWND, AALPHA, BBETA, ZZALP,&
          TTAUWSHELTER, SSWELLF, DDEN2, DTH, SSINTHP,  &
-         ZZ0RAT, SSINBR
+         ZZ0RAT, SSINBR, SINTAILPAR
 #ifdef W3_S
     USE W3SERVMD, ONLY: STRACE
 #endif
@@ -615,7 +616,7 @@ CONTAINS
       !  At this point UORB and AORB are the variances of the orbital velocity and surface elevation
       !
       UORB = UORB + EB *SIG(IK)**2 * DDEN(IK) / CG(IK)
-      AORB = AORB + EB             * DDEN(IK) / CG(IK)  !deep water only
+      AORB = AORB + EB             * DDEN(IK) / CG(IK)  !correct for deep water only
     END DO
 
     UORB  = 2*SQRT(UORB)                  ! significant orbital amplitude
@@ -975,7 +976,8 @@ CONTAINS
          SSDSDTH, SSDSCOS, TH, DTH, XFR, ECOS, ESIN,   &
          SSDSC,  SSDSBRF1, SSDSBCK, SSDSBINT, SSDSPBK, &
          SSDSABK, SSDSHCK, IKTAB, DCKI, SATINDICES,    &
-         SATWEIGHTS, CUMULW, NKHS, NKD, NDTAB, QBI
+         SATWEIGHTS, CUMULW, NKHS, NKD, NDTAB, QBI,    &
+         SINTAILPAR
 #ifdef W3_S
     USE W3SERVMD, ONLY: STRACE
 #endif
@@ -2112,6 +2114,7 @@ CONTAINS
     !
     ! 2.   Estimation of spontaneous breaking from local saturation
     !
+    !############################################################################################"
     SELECT CASE (NINT(SSDSC(1)))
     CASE (1)
       !
@@ -2268,7 +2271,7 @@ CONTAINS
       BRLAMBDA = PB / (2.*PI**2.)
       SRHS = DDIAG * A
 
-      !
+      !############################################################################################"
     CASE(2)
       !
       ! 2.b             Computes spontaneous breaking for T500 (Filipot et al. JGR 2010)
