@@ -1951,7 +1951,7 @@ CONTAINS
          SSDSISO, SSDSDTH, SSDSBM, AAIRCMIN,        &
          SSDSBRFDF, SSDSBCK, IKTAB, DCKI,           &
          SATINDICES, SATWEIGHTS, CUMULW, NKHS, NKD, &
-         NDTAB, QBI
+         NDTAB, QBI, DSIP, SSDSBRF1,XFR
 #ifdef W3_IG1
     USE W3GDATMD, ONLY: IGPARS
 #endif
@@ -1991,7 +1991,7 @@ CONTAINS
     INTEGER                 :: IK, IK1, ITH, IK2, JTH, ITH2,             &
          IKHS, IKD, SDSNTH, IT, IKM, NKM
     INTEGER                 :: NSMOOTH(NK)
-    REAL                    :: C, COSWIND, ASUM, SDIAGISO
+    REAL                    :: C, C2, CUMULWISO, COSWIND, ASUM, SDIAGISO
     REAL                    :: COEF1, COEF2, COEF4(NK),      &
          COEF5(NK)
 
