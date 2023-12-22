@@ -232,7 +232,7 @@ CONTAINS
     USE W3GDATMD, ONLY: NK, NTH, NSPEC, SIG, DTH, DDEN, WWNMEANP, &
          WWNMEANPTAIL, FTE, FTF, SSTXFTF, SSTXFTWN,&
          SSTXFTFTAIL, SSWELLF, ESIN, ECOS, AAIRCMIN, &
-         AAIRGB, AALPHA, ZZWND
+         AAIRGB, AALPHA, ZZWND, SSDSC
 #ifdef W3_S
     USE W3SERVMD, ONLY: STRACE
 #endif
@@ -268,7 +268,7 @@ CONTAINS
 #endif
 
     REAL                    :: TAUW, EBAND, EMEANWS,UNZ,            &
-         EB(NK),EB2(NK),ELCS, ELSN
+         EB(NK),EB2(NK),ELCS, ELSN, SIGFAC
     !/
     !/ ------------------------------------------------------------------- /
     !/
@@ -295,11 +295,12 @@ CONTAINS
     DO IK=1, NK
       EB(IK)  = 0.
       EB2(IK) = 0.
+      SIGFAC=SIG(IK)**SSDSC(12) * DDEN(IK) / CG(IK)
       DO ITH=1, NTH
         IS=ITH+(IK-1)*NTH
         EB(IK) = EB(IK) + A(ITH,IK)
-        ELCS = ELCS + A(ITH,IK)*ECOS(IS)*DDEN(IK) / CG(IK)
-        ELSN = ELSN + A(ITH,IK)*ESIN(IS)*DDEN(IK) / CG(IK)
+        ELCS = ELCS + A(ITH,IK)*ECOS(IS)*SIGFAC
+        ELSN = ELSN + A(ITH,IK)*ESIN(IS)*SIGFAC
         IF (LLWS(IS)) EB2(IK) = EB2(IK) + A(ITH,IK)
         AMAX   = MAX ( AMAX , A(ITH,IK) )
       END DO
@@ -359,7 +360,6 @@ CONTAINS
     CALL W3FLX5 ( ZZWND, U, UDIR, TAUA, TAUADIR, DAIR,  &
          USTAR, USDIR, Z0, CD, CHARN )
 #else
-    Z0=0.
     CALL CALC_USTAR(U,TAUW,USTAR,Z0,CHARN)
     UNZ    = MAX ( 0.01 , U )
     CD     = (USTAR/UNZ)**2
