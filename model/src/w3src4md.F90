@@ -1266,7 +1266,7 @@ CONTAINS
     ! ----------------------------------------------------------------------
     INTEGER I,J,ITER
     REAL ZTAUW,UTOP,CDRAG,WCD,USTOLD,TAUOLD
-    REAL X,UST,ZZ0,ZNU,F,DELF,ZZ00
+    REAL X,UST,ZZ0,F,DELF,ZZ00
     !
     !
     DELU    = UMAX/FLOAT(JUMAX)
@@ -1757,6 +1757,7 @@ CONTAINS
     !  2. Method :
     !
     !     Computation of u* based on Quasi-linear theory
+    !     uses Charnock relation with modified roughness Z1=Z0/SQRT(1-TAUW/TAU)
     !
     !  3. Parameters :
     !
@@ -1793,8 +1794,8 @@ CONTAINS
     !
     ! 10. Source code :
     !-----------------------------------------------------------------------------!
-    USE CONSTANTS, ONLY: GRAV, KAPPA
-    USE W3GDATMD,  ONLY: ZZWND, AALPHA
+    USE CONSTANTS, ONLY: GRAV, KAPPA, NU_AIR
+    USE W3GDATMD,  ONLY: ZZWND, AALPHA, ZZ0MAX, SINTAILPAR
 #ifdef W3_T
     USE W3ODATMD, ONLY: NDST
 #endif
@@ -1802,22 +1803,60 @@ CONTAINS
     REAL, intent(in) :: WINDSPEED,TAUW
     REAL, intent(out) :: USTAR, Z0, CHARN
     ! local variables
-    REAL SQRTCDM1
-    REAL XI,DELI1,DELI2,XJ,delj1,delj2
-    REAL TAUW_LOCAL
-    INTEGER IND,J
+    REAL             :: SQRTCDM1
+    REAL             :: XI,DELI1,DELI2,XJ,delj1,delj2  ! used for table version
+    INTEGER          :: IND,J
+    REAL             :: TAUW_LOCAL
+    REAL             :: TAUOLD,CDRAG,WCD,USTOLD,X,UST,ZZ0,ZNU,ZZ00,F,DELF
+    INTEGER, PARAMETER      :: NITER=10
+    REAL   , PARAMETER      :: XM=0.50, EPS1=0.00001
+    INTEGER                 :: ITER
+    !     VARIABLE.   TYPE.     PURPOSE.
+    !      *XM*        REAL      POWER OF TAUW/TAU IN ROUGHNESS LENGTH.
+    !      *XNU*       REAL      KINEMATIC VISCOSITY OF AIR.
+    !      *NITER*     INTEGER   NUMBER OF ITERATIONS TO OBTAIN TOTAL STRESS
+    !      *EPS1*      REAL      SMALL NUMBER TO MAKE SURE THAT A SOLUTION
+    !                            IS OBTAINED IN ITERATION WITH TAU>TAUW.
+
     !
-    TAUW_LOCAL=MAX(MIN(TAUW,TAUWMAX),0.)
-    XI      = SQRT(TAUW_LOCAL)/DELTAUW
-    IND     = MIN ( ITAUMAX-1, INT(XI)) ! index for stress table
-    DELI1   = MIN(1.,XI - REAL(IND))  !interpolation coefficient for stress table
-    DELI2   = 1. - DELI1
-    XJ      = WINDSPEED/DELU
-    J       = MIN ( JUMAX-1, INT(XJ) )
-    DELJ1   = MIN(1.,XJ - REAL(J))
-    DELJ2   = 1. - DELJ1
-    USTAR=(TAUT(IND,J)*DELI2+TAUT(IND+1,J  )*DELI1)*DELJ2 &
-         + (TAUT(IND,J+1)*DELI2+TAUT(IND+1,J+1)*DELI1)*DELJ1
+    IF (SINTAILPAR(1).GT.0.5) THEN
+      TAUW_LOCAL=MAX(MIN(TAUW,TAUWMAX),0.)
+      XI      = SQRT(TAUW_LOCAL)/DELTAUW
+      IND     = MIN ( ITAUMAX-1, INT(XI)) ! index for stress table
+      DELI1   = MIN(1.,XI - REAL(IND))  !interpolation coefficient for stress table
+      DELI2   = 1. - DELI1
+      XJ      = WINDSPEED/DELU
+      J       = MIN ( JUMAX-1, INT(XJ) )
+      DELJ1   = MIN(1.,XJ - REAL(J))
+      DELJ2   = 1. - DELJ1
+      USTAR=(TAUT(IND,J)*DELI2+TAUT(IND+1,J  )*DELI1)*DELJ2 &
+           + (TAUT(IND,J+1)*DELI2+TAUT(IND+1,J+1)*DELI1)*DELJ1
+    ELSE
+      ! This max is for comparison ... to be removed later
+      !        TAUW_LOCAL=MAX(MIN(TAUW,TAUWMAX),0.)
+      TAUW_LOCAL=TAUW
+      CDRAG   = 0.0012875
+      WCD     = SQRT(CDRAG)
+      USTOLD  = WINDSPEED*WCD
+      TAUOLD  = MAX(USTOLD**2, TAUW_LOCAL+EPS1)
+      ! Newton method to solve for ustar in U=ustar*log(Z/Z0)
+      DO ITER=1,NITER
+        X   = TAUW_LOCAL/TAUOLD
+        UST = SQRT(TAUOLD)
+        ZZ00=AALPHA*TAUOLD/GRAV
+        IF (ZZ0MAX.NE.0) ZZ00=MIN(ZZ00,ZZ0MAX)
+        ! Corrects roughness ZZ00 for quasi-linear effect
+        ZZ0 = ZZ00/(1.-X)**XM
+        ZNU = 0.11*nu_air/MAX(UST,1E-6)
+        ZZ0 = SINTAILPAR(5)*ZNU+ZZ0
+        F   = UST-KAPPA*WINDSPEED/(ALOG(ZZWND/ZZ0))
+        DELF= 1.-KAPPA*WINDSPEED/(ALOG(ZZWND/ZZ0))**2*2./UST &
+             *(1.-(XM+1)*X)/(1.-X)
+        UST = UST-F/DELF
+        TAUOLD= MAX(UST**2., TAUW_LOCAL+EPS1)
+      END DO
+      USTAR=UST
+    END IF
     !
     ! Determines roughness length
     !
@@ -1834,6 +1873,7 @@ CONTAINS
       END IF
       CHARN = AALPHA
     END IF
+    !  WRITE(6,*) 'CALC_USTAR:',WINDSPEED,TAUW,AALPHA,CHARN,Z0,USTAR
     !
     RETURN
   END SUBROUTINE CALC_USTAR
