@@ -1924,10 +1924,11 @@ CONTAINS
     !/    06-Jun-2018 : Add optional DEBUGSRC              ( version 6.04 )
     !/    22-Feb-2020 : Option to use Romero (GRL 2019)    ( version 7.06 )
     !/    13-Aug-2021 : Consider DAIR a variable           ( version 7.14 )
+    !/    01-Mar-2023 : Clean up of SDS4                   ( version 7.xx )
     !/
     !  1. Purpose :
     !
-    !     Calculate whitecapping source term and diagonal term of derivative.
+    !     Calculate wave dissipation source term and diagonal term of derivative.
     !
     !  2. Method :
     !
@@ -2046,19 +2047,15 @@ CONTAINS
     REAL                    :: FACSAT, DKHS, FACSTRAINB, FACSTRAINL
     REAL                    :: BTH0(NK)     !saturation spectrum
     REAL                    :: BTH(NSPEC)   !saturation spectrum
-    REAL                    :: BTH0S(NK)    !smoothed saturation spectrum
-    REAL                    :: BTHS(NSPEC)  !smoothed saturation spectrum
-    INTEGER                 :: IMSSMAX(NK), NTHSUM
-    REAL                    :: MSSSUM(NK,5), WTHSUM(NTH), FACHF
-    REAL                    :: MSSSUM2(NK,NTH)
-    REAL                    :: MSSLONG(NK,NTH)
+    REAL                    :: MSSSUM(NK,5),  FACHF
+    REAL                    :: MSSLONG
     REAL                    :: MSSPCS, MSSPC2, MSSPS2, MSSP, MSSD, MSSTH
     REAL                    :: MICHE, X, KLOC
 #ifdef W3_T0
     REAL                    :: DOUT(NK,NTH)
 #endif
     REAL                    :: QB(NK), S2(NK)
-    REAL                    :: TSTR, TMAX, DT, T, MFT
+    REAL                    :: TSTR, TMAX, DT, T, MFT, DIRFORCUM
     REAL                    :: PB(NSPEC), PB2(NSPEC), BRM12(NK), BTOVER
     REAL                    :: KO, LMODULATION(NTH)
     !/
@@ -2076,10 +2073,10 @@ CONTAINS
     !     found in certain compilers
     NSMOOTH=0
     S1=0.; E1=0.
-    NTIMES=0;IKSUP=0;IMSSMAX=0
+    NTIMES=0;IKSUP=0
     DK=0.; HS=0.; KBAR=0.; DCK=0.; EFDF=0.
-    BTH0=0.; BTH=0.; BTH0S=0.; DDIAG=0.; SRHS=0.; PB=0.
-    BTHS=0.; MSSSUM(:,:)=0.
+    BTH0=0.; BTH=0.; DDIAG=0.; SRHS=0.; PB=0.
+    MSSSUM(:,:)=0.
 #ifdef W3_T0
     DOUT=0.
 #endif
@@ -2089,50 +2086,33 @@ CONTAINS
     ! 1.  Initialization and numerical factors
     !
     FACTURB=SSDSC(5)*USTAR**2/GRAV*DAIR/DWAT
+    DIKCUMUL = NINT(SSDSBRF1/(XFR-1.))
     BREAKFRACTION=0.
     RENEWALFREQ=0.
     IK1=1
 #ifdef W3_IG1
     IK1=NINT(IGPARS(5))+1
 #endif
-    NTHSUM=MIN(FLOOR(SSDSC(10)+0.5),NTH-1)  ! number of angular bins for enhanced modulation
-    IF (NTHSUM.GT.0) THEN
-      WTHSUM(1:NTHSUM)=1
-      WTHSUM(NTHSUM+1)=SSDSC(10)+0.5-NTHSUM
-    ELSE
-      WTHSUM(1)=2*SSDSC(10)
-    END IF
     !
-    ! 1.b MSS parameters used for Modulation factors for B or lambda
+    ! 1.b MSS parameters used for Modulation factors for lambda (Romero )
     !
     IF (SSDSC(8).GT.0.OR.SSDSC(11).GT.0.OR.SSDSC(18).GT.0) THEN
-      MSSSUM2(:,:)=0.
       DO IK=1,NK
-        IMSSMAX (IK) = 1
         MSSP   = 0.
         MSSPC2 = 0.
         MSSPS2 = 0.
         MSSPCS = 0.
         !
-        ! Sums the contributions to the directional MSS for all ITH
+        ! Sums the contributions to the directional MSS for all angles
         !
         DO ITH=1,NTH
           IS=ITH+(IK-1)*NTH
-          MSSLONG(IK,ITH) = K(IK)**SSDSC(20) * A(IS) * DDEN(IK) / CG(IK) ! contribution to MSS
+          MSSLONG  = K(IK)**SSDSC(20) * A(IS) * DDEN(IK) / CG(IK) ! contribution to MSS
+          MSSPC2 = MSSPC2 +MSSLONG*EC2(ITH)
+          MSSPS2 = MSSPS2 +MSSLONG*ES2(ITH)
+          MSSPCS = MSSPCS +MSSLONG*ESC(ITH)
+          MSSP   = MSSP   +MSSLONG
         END DO
-        DO ITH=1,NTH
-          DO JTH=-NTHSUM,NTHSUM
-            ITH2 = 1+MOD(ITH-1+JTH+NTH,NTH)
-            MSSSUM2(IK,ITH) = MSSSUM2(IK,ITH)+MSSLONG(IK,ITH2)*WTHSUM(ABS(JTH)+1)
-          END DO
-          MSSPC2 = MSSPC2 +MSSLONG(IK,ITH)*EC2(ITH)
-          MSSPS2 = MSSPS2 +MSSLONG(IK,ITH)*ES2(ITH)
-          MSSPCS = MSSPCS +MSSLONG(IK,ITH)*ESC(ITH)
-          MSSP   = MSSP   +MSSLONG(IK,ITH)
-        END DO
-        !
-        ! Now sums over IK
-        !
         MSSSUM  (IK:NK,1) = MSSSUM (IK:NK,1) +MSSP
         MSSSUM  (IK:NK,3) = MSSSUM (IK:NK,3) +MSSPC2
         MSSSUM  (IK:NK,4) = MSSSUM (IK:NK,4) +MSSPS2
@@ -2142,13 +2122,7 @@ CONTAINS
         !
         MSSD=0.5*(ATAN2(2*MSSSUM(IK,5),MSSSUM(IK,3)-MSSSUM(IK,4)))
         IF (MSSD.LT.0) MSSD = MSSD + PI
-        IMSSMAX (IK)=1+NINT(MSSD *NTH/TPI)
-        !
-        ! mss along perpendicular direction
-        !
-        MSSSUM  (IK,2)  = MAX(0.,MSSSUM(IK,4)*COS(MSSD)**2          &
-             -2*MSSSUM(IK,5)*SIN(MSSD)*COS(MSSD)+  &
-             MSSSUM(IK,3)*SIN(MSSD)**2 )
+        MSSSUM  (IK,2)  =  MSSD
       END DO
     END IF ! SSDSC(8).GT.0) THEN
     !
@@ -2164,10 +2138,6 @@ CONTAINS
       !
       ! 2.a.1 Computes saturation
       !
-      SDSNTH = MIN(NINT(SSDSDTH/(DTH*RADE)),NTH/2-1)
-      !       SSDSDIK is the integer difference in frequency bands
-      !       between the "large breakers" and short "wiped-out waves"
-      !
       BTH(:) = 0.
 
       DO  IK=IK1, NK
@@ -2177,99 +2147,20 @@ CONTAINS
         BTH(IS0+1)=0.
         ASUM = SUM(A(IS0+1:IS0+NTH))
         BTH0(IK)=ASUM*FACSAT
-        IKC = MAX(1,IK-DIKCUMUL)
-        KLOC=K(IK)**(2-SSDSC(20)) ! local wavenumber factor, if mss not used.
-
+        !
         IF (SSDSDTH.GE.180) THEN  ! integrates around full circle
           BTH(IS0+1:IS0+NTH)=BTH0(IK)
         ELSE
           DO ITH=1,NTH            ! partial integration
             IS=ITH+(IK-1)*NTH
-
-            ! straining effect of long waves on short waves
-            ! extended from Longuet-Higgins and Stewart (JFM 1960, eq. 2.27) the amplitude modulation
-            ! in deep water is equal to the long wave slope k*a cos(theta1-theta2)
-            ! Here we assume that the saturation is modulated as (1 + SSDSC(8) *  sqrt(mss) )
-            ! where mss_theta is the mss in direction ITH.
-            !
-            ! Note: SSDSC(8) is sqrt(2)*times the mss MTF: equal to 4*sqrt(2) according to Longuet-Higgins and Stewart
-            !
-            IF (SSDSC(8).GT.0.OR.SSDSC(11).GT.0) THEN
-              !
-              MSSTH=(MSSSUM(IKC,1)-MSSSUM(IKC,2))*EC2(1+ABS(ITH-IMSSMAX (IKC))) &
-                   +MSSSUM(IKC,2)*ES2(1+ABS(ITH-IMSSMAX (IKC)))*KLOC
-              !
-              FACSTRAINB=1+SSDSC(8)*SQRT(MSSTH)+SSDSC(11)*SQRT(MSSSUM2(IKC,ITH)*KLOC)
-            ELSE
-              FACSTRAINB=1
-            END IF
-            !
             BTH(IS)=DOT_PRODUCT(SATWEIGHTS(:,ITH),  A(IS0+SATINDICES(:,ITH)) ) &
-                 *FACSAT*FACSTRAINB
+                 *FACSAT
           END DO
 
-          IF (SSDSISO.NE.1) THEN
-            BTH0(IK)=MAXVAL(BTH(IS0+1:IS0+NTH))
-          END IF
+          BTH0(IK)=MAXVAL(BTH(IS0+1:IS0+NTH))
         END IF
         !
-      END DO !NK END
-      !
-      !   Optional smoothing of B and B0 over frequencies
-      !
-      IF (SSDSBRFDF.GT.0.AND.SSDSBRFDF.LT.NK/2) THEN
-        BTH0S(:)=BTH0(:)
-        BTHS(:)=BTH(:)
-        NSMOOTH(:)=1
-        DO IK=1, SSDSBRFDF
-          BTH0S(1+SSDSBRFDF)=BTH0S(1+SSDSBRFDF)+BTH0(IK)
-          NSMOOTH(1+SSDSBRFDF)=NSMOOTH(1+SSDSBRFDF)+1
-          DO ITH=1,NTH
-            IS=ITH+(IK-1)*NTH
-            BTHS(ITH+SSDSBRFDF*NTH)=BTHS(ITH+SSDSBRFDF*NTH)+BTH(IS)
-          END DO
-        END DO
-        DO IK=IK1+1+SSDSBRFDF,1+2*SSDSBRFDF
-          BTH0S(1+SSDSBRFDF)=BTH0S(1+SSDSBRFDF)+BTH0(IK)
-          NSMOOTH(1+SSDSBRFDF)=NSMOOTH(1+SSDSBRFDF)+1
-          DO ITH=1,NTH
-            IS=ITH+(IK-1)*NTH
-            BTHS(ITH+SSDSBRFDF*NTH)=BTHS(ITH+SSDSBRFDF*NTH)+BTH(IS)
-          END DO
-        END DO
-        DO IK=SSDSBRFDF,IK1,-1
-          BTH0S(IK)=BTH0S(IK+1)-BTH0(IK+SSDSBRFDF+1)
-          NSMOOTH(IK)=NSMOOTH(IK+1)-1
-          DO ITH=1,NTH
-            IS=ITH+(IK-1)*NTH
-            BTHS(IS)=BTHS(IS+NTH)-BTH(IS+(SSDSBRFDF+1)*NTH)
-          END DO
-        END DO
-        !
-        DO IK=IK1+1+SSDSBRFDF,NK-SSDSBRFDF
-          BTH0S(IK)=BTH0S(IK-1)-BTH0(IK-SSDSBRFDF-1)+BTH0(IK+SSDSBRFDF)
-          NSMOOTH(IK)=NSMOOTH(IK-1)
-          DO ITH=1,NTH
-            IS=ITH+(IK-1)*NTH
-            BTHS(IS)=BTHS(IS-NTH)-BTH(IS-(SSDSBRFDF+1)*NTH)+BTH(IS+(SSDSBRFDF)*NTH)
-          END DO
-        END DO
-        !
-        DO IK=NK-SSDSBRFDF+1,NK
-          BTH0S(IK)=BTH0S(IK-1)-BTH0(IK-SSDSBRFDF)
-          NSMOOTH(IK)=NSMOOTH(IK-1)-1
-          DO ITH=1,NTH
-            IS=ITH+(IK-1)*NTH
-            BTHS(IS)=BTHS(IS-NTH)-BTH(IS-(SSDSBRFDF+1)*NTH)
-          END DO
-        END DO
-        !    division by NSMOOTH
-        BTH0(:)=MAX(0.,BTH0S(:)/NSMOOTH(:))
-        DO IK=IK1,NK
-          IS0=(IK-1)*NTH
-          BTH(IS0+1:IS0+NTH)=MAX(0.,BTHS(IS0+1:IS0+NTH)/NSMOOTH(IK))
-        END DO
-      END IF  ! end of optional smoothing
+      END DO !IK=NK
       !
       !  2.a.2  Computes spontaneous breaking dissipation rate
       !
@@ -2281,7 +2172,8 @@ CONTAINS
           MICHE=1.
         ELSE
           X=TANH(MIN(K(IK)*DEPTH,10.))
-          MICHE=(X*(SSDSBM(1)+X*(SSDSBM(2)+X*(SSDSBM(3)+X*SSDSBM(4)))))**2 ! Correction of saturation level for shallow-water kinematics
+          ! Correction of saturation threshold for shallow-water kinematics
+          MICHE=(X*(SSDSBM(1)+X*(SSDSBM(2)+X*(SSDSBM(3)+X*SSDSBM(4)))))**2
         END IF
         COEF1=(SSDSBR*MICHE)
         !
@@ -2455,7 +2347,8 @@ CONTAINS
       ! Compute Lambda = PB* l(k,th)
       ! with l(k,th)=1/(2*pi²)= the breaking crest density
       BRLAMBDA = PB / (2.*PI**2.)
-      !
+      SRHS = DDIAG * A
+      !############################################################################################"
     CASE(3)
       !
       ! 2c Romero (GRL 2019)
@@ -2468,27 +2361,15 @@ CONTAINS
         KLOC=K(IK)**(2-SSDSC(20)) ! local wavenumber factor, if mss not used.
         BTH(1:NTH)=MAX(A(IS0+1:IS0+NTH)*SIG(IK)*K(IK)**3,.00000000000001)
         !
-        IF (SSDSC(8).GT.0) THEN ! Applies modulation factor on B
-          DO ITH=1,NTH
-            MSSTH=(MSSSUM(IK,1)-MSSSUM(IK,2))*EC2(1+ABS(ITH-IMSSMAX (IK))) &
-                 +MSSSUM(IK,2)*ES2(1+ABS(ITH-IMSSMAX (IK)))*KLOC
-            FACSTRAINB=(1.+SSDSC(8)*SQRT(MSSTH)+SSDSC(11)*SQRT(MSSSUM2(IK,ITH))*KLOC)
-            BTH(ITH)=BTH(ITH)*FACSTRAINB
-          END DO
-        END IF
-        !
+        DIRFORCUM=DLWMEAN
+        IF (SSDSC(11).GT.0) DIRFORCUM=MSSSUM(IK,2)
+
         C=SIG(IK)/K(IK)
         BTH0(IK)=sum(BTH(1:NTH)*DTH)
         IF (SSDSC(18).GT.0) THEN ! Applies modulation factor on Lambda
           DO ITH=1,NTH
-            IF (SSDSC(11).GT.0) THEN
-              MSSTH=(MSSSUM(IK,1)-MSSSUM(IK,2))*EC2(1+ABS(ITH-IMSSMAX (IK))) &
-                   +MSSSUM(IK,2)*ES2(1+ABS(ITH-IMSSMAX (IK)))*KLOC
-              FACSTRAINL=1.+SSDSC(18)*SQRT(MSSTH)+SSDSC(11)*SQRT(MSSSUM2(IK,ITH)*KLOC)
-            ELSE
-              FACSTRAINL=1.+SSDSC(18)*((MSSSUM(IK,1)*KLOC)**SSDSC(14) *      &   ! Romero
-                   (ECOS(ITH)*COS(DLWMEAN)+ESIN(ITH)*SIN(DLWMEAN))**2)
-            ENDIF
+            FACSTRAINL=1.+SSDSC(18)*((MSSSUM(IK,1)*KLOC)**SSDSC(14) *      &   ! Romero
+                 (ECOS(ITH)*COS(DIRFORCUM)+ESIN(ITH)*SIN(DIRFORCUM))**2)
             LMODULATION(ITH)= FACSTRAINL**SSDSC(19)
           END DO
         ELSE
