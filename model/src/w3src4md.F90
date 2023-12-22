@@ -829,6 +829,15 @@ CONTAINS
     CALL OUTMAT (NDST, D, NTH, NTH, NK, 'diag Sin')
 #endif
     !
+    TAUPX=TAUX-ABS(TTAUWSHELTER)*XSTRESS
+    TAUPY=TAUY-ABS(TTAUWSHELTER)*YSTRESS
+    USTP=(TAUPX**2+TAUPY**2)**0.25
+    USDIRP=ATAN2(TAUPY,TAUPX)
+
+    UST=USTP
+    !
+    ! Computes HF tail
+    !
     ! Computes the high-frequency contribution
     ! the difference in spectal density (kx,ky) to (f,theta)
     ! is integrated in this modified CONST0
@@ -841,35 +850,39 @@ CONTAINS
       TEMP=TEMP+A(IS)*(MAX(COSWIND,0.))**3
     END DO
 
-    TAUPX=TAUX-ABS(TTAUWSHELTER)*XSTRESS
-    TAUPY=TAUY-ABS(TTAUWSHELTER)*YSTRESS
-    USTP=(TAUPX**2+TAUPY**2)**0.25
-    USDIRP=ATAN2(TAUPY,TAUPX)
 
-    UST=USTP
-    ! finds the values in the tabulated stress TAUHFT
-    XI=UST/DELUST
-    IND  = MAX(1,MIN (IUSTAR-1, INT(XI)))
-    DELI1= MAX(MIN (1. ,XI-FLOAT(IND)),0.)
-    DELI2= 1. - DELI1
-    XJ=MAX(0.,(GRAV*Z0/MAX(UST,0.00001)**2-AALPHA) / DELALP)
-    J    = MAX(1 ,MIN (IALPHA-1, INT(XJ)))
-    DELJ1= MAX(0.,MIN (1.      , XJ-FLOAT(J)))
-    DELJ2=1. - DELJ1
-    IF (TTAUWSHELTER.GT.0) THEN
-      XK = CONST0*TEMP / DELTAIL
-      I = MIN (ILEVTAIL-1, INT(XK))
-      DELK1= MIN (1. ,XK-FLOAT(I))
-      DELK2=1. - DELK1
-      TAU1 =((TAUHFT2(IND,J,I)*DELI2+TAUHFT2(IND+1,J,I)*DELI1 )*DELJ2 &
-           +(TAUHFT2(IND,J+1,I)*DELI2+TAUHFT2(IND+1,J+1,I)*DELI1)*DELJ1)*DELK2 &
-           +((TAUHFT2(IND,J,I+1)*DELI2+TAUHFT2(IND+1,J,I+1)*DELI1 )*DELJ2 &
-           +(TAUHFT2(IND,J+1,I+1)*DELI2+TAUHFT2(IND+1,J+1,I+1)*DELI1)*DELJ1)*DELK1
+    IF (SINTAILPAR(1).LT.0.5) THEN
+      write(*,*) 'CODE WITHOUT TABLE NOT ADDED YET FOR TEST'
+      !
+      ! In this case, uses tables for high frequency contribution to TAUW.
+      !
     ELSE
-      TAU1 =(TAUHFT(IND,J)*DELI2+TAUHFT(IND+1,J)*DELI1 )*DELJ2 &
-           +(TAUHFT(IND,J+1)*DELI2+TAUHFT(IND+1,J+1)*DELI1)*DELJ1
-    END IF
-    TAUHF = CONST0*TEMP*UST**2*TAU1
+      ! finds the values in the tabulated stress TAUHFT
+      XI=UST/DELUST
+      IND  = MAX(1,MIN (IUSTAR-1, INT(XI)))
+      DELI1= MAX(MIN (1. ,XI-FLOAT(IND)),0.)
+      DELI2= 1. - DELI1
+      XJ=MAX(0.,(GRAV*Z0/MAX(UST,0.00001)**2-AALPHA) / DELALP)
+      J    = MAX(1 ,MIN (IALPHA-1, INT(XJ)))
+      DELJ1= MAX(0.,MIN (1.      , XJ-FLOAT(J)))
+      DELJ2=1. - DELJ1
+      IF (TTAUWSHELTER.GT.0) THEN
+        XK = CONST0*TEMP / DELTAIL
+        I = MIN (ILEVTAIL-1, INT(XK))
+        DELK1= MIN (1. ,XK-FLOAT(I))
+        DELK2=1. - DELK1
+        TAU1 =((TAUHFT2(IND,J,I)*DELI2+TAUHFT2(IND+1,J,I)*DELI1 )*DELJ2 &
+             +(TAUHFT2(IND,J+1,I)*DELI2+TAUHFT2(IND+1,J+1,I)*DELI1)*DELJ1)*DELK2 &
+             +((TAUHFT2(IND,J,I+1)*DELI2+TAUHFT2(IND+1,J,I+1)*DELI1 )*DELJ2 &
+             +(TAUHFT2(IND,J+1,I+1)*DELI2+TAUHFT2(IND+1,J+1,I+1)*DELI1)*DELJ1)*DELK1
+      ELSE
+        TAU1 =(TAUHFT(IND,J)*DELI2+TAUHFT(IND+1,J)*DELI1 )*DELJ2 &
+             +(TAUHFT(IND,J+1)*DELI2+TAUHFT(IND+1,J+1)*DELI1)*DELJ1
+      END IF
+      !
+      TAUHF = CONST0*TEMP*UST**2*TAU1
+    END IF ! End of test on use of table
+
     TAUWX = XSTRESS+TAUHF*COS(USDIRP)
     TAUWY = YSTRESS+TAUHF*SIN(USDIRP)
     !
