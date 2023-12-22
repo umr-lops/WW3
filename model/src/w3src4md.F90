@@ -91,11 +91,9 @@ MODULE W3SRC4MD
   !air kinematic viscosity (used in WAM)
   INTEGER, PARAMETER      :: ITAUMAX=200,JUMAX=200
   INTEGER, PARAMETER      :: IUSTAR=100,IALPHA=200, ILEVTAIL=50
-  REAL                    :: TAUT(0:ITAUMAX,0:JUMAX), DELTAUW, DELU
-  ! Table for H.F. stress as a function of 2 variables
-  REAL                    :: TAUHFT(0:IUSTAR,0:IALPHA), DELUST, DELALP
-  ! Table for H.F. stress as a function of 3 variables
-  REAL                    :: TAUHFT2(0:IUSTAR,0:IALPHA,0:ILEVTAIL)
+  ! Tables for total stress and H.F. stress as a function of 2 or 3 variables
+  REAL, ALLOCATABLE       :: TAUT(:,:),TAUHFT(:,:),TAUHFT2(:,:,:)
+  REAL                    :: DELUST, DELALP,DELTAUW, DELU
   ! Table for swell damping
   REAL                    :: DELTAIL
   REAL,    PARAMETER      :: UMAX    = 50.
@@ -562,13 +560,21 @@ CONTAINS
     REAL XI,DELI1,DELI2
     REAL XJ,DELJ1,DELJ2
     REAL XK,DELK1,DELK2
-    REAL                    :: CONST, CONST0, CONST2, TAU1
+    REAL                    :: CONST, CONST0, CONST2, TAU1, TAU1NT, ZINF, TENSK
     REAL X,ZARG,ZLOG,UST
     REAL                    :: COSWIND, XSTRESS, YSTRESS, TAUHF
     REAL TEMP, TEMP2
     INTEGER IND,J,I,ISTAB
     REAL DSTAB(3,NSPEC), DVISC, DTURB
     REAL STRESSSTAB(3,2),STRESSSTABN(3,2)
+    !
+    INTEGER, PARAMETER      :: JTOT=50
+    REAL   , PARAMETER      :: KM=363.,CMM=0.2325  ! K and C at phase speed minimum in rad/m
+    REAL                    :: OMEGACC, OMEGA, ZZ0, ZX, ZBETA, USTR, TAUR,  &
+         CONST1, LEVTAIL0, X0, Y, DELY, YC, ZMU,      &
+         LEVTAIL, CGTAIL, ALPHAM, FM, ALPHAT, FMEAN
+
+    REAL, ALLOCATABLE       :: W(:)
 #ifdef W3_T0
     REAL                    :: DOUT(NK,NTH)
 #endif
@@ -591,6 +597,11 @@ CONTAINS
     DSTAB =0.
     STRESSSTAB =0.
     STRESSSTABN =0.
+    !
+    ! Coupling coefficient times density ratio DRAT
+    !
+    CONST1=BBETA/KAPPA**2  ! needed for the tail
+    CONST0=CONST1*DRAT     ! needed for the resolved spectrum
     !
     ! 1.a  estimation of surface roughness parameters
     !
@@ -618,7 +629,7 @@ CONTAINS
       UORB = UORB + EB *SIG(IK)**2 * DDEN(IK) / CG(IK)
       AORB = AORB + EB             * DDEN(IK) / CG(IK)  !correct for deep water only
     END DO
-
+    !      FMEAN = SQRT((UORB+1E-6)/(AORB+1E-6))
     UORB  = 2*SQRT(UORB)                  ! significant orbital amplitude
     AORB1 = 2*AORB**(1-0.5*SSWELLF(6))    ! half the significant wave height ... if SWELLF(6)=1
     RE = 4*UORB*AORB1 / NU_AIR           ! Reynolds number
@@ -695,10 +706,6 @@ CONTAINS
       !
       STRESSSTAB(ISTAB,:)=0.
       STRESSSTABN(ISTAB,:)=0.
-      !
-      ! Coupling coefficient times density ratio DRAT
-      !
-      CONST0=BBETA*DRAT/(kappa**2)
       !
       DO IK=1, NK
         TAUPX=TAUX-ABS(TTAUWSHELTER)*STRESSSTAB(ISTAB,1)
@@ -814,7 +821,7 @@ CONTAINS
         DOUT(IK,ITH) = D(ITH+(IK-1)*NTH)
       END DO
     END DO
-    CALL PRT2DS (NDST, NK, NK, NTH, DOUT, SIG(1:NK), '  ', 1.,     &
+    CALL PRT2DS (NDST, NK, NK, NTH, DOUT, SIG(1), '  ', 1.,         &
          0.0, 0.001, 'Diag Sin', ' ', 'NONAME')
 #endif
     !
@@ -1018,11 +1025,16 @@ CONTAINS
     !
     ! These precomputed tables are written in mod_def.ww3
     !
-    IF (FLTABS) THEN
-      CALL TABU_STRESS
-      CALL TABU_TAUHF(SIG(NK) )      !tabulate high-frequency stress: 2D table
+    IF (SINTAILPAR(1).GT.0.5) THEN
+      IF (.NOT. ALLOCATED(TAUT)) ALLOCATE(TAUT(0:ITAUMAX,0:JUMAX))
+      IF (.NOT. ALLOCATED(TAUHFT)) ALLOCATE(TAUHFT(0:IUSTAR,0:IALPHA))
+      IF (FLTABS) THEN
+        CALL TABU_STRESS
+        CALL TABU_TAUHF(SIG(NK) )      !tabulate high-frequency stress: 2D table
+      END IF
       IF (TTAUWSHELTER.GT.0) THEN
-        CALL TABU_TAUHF2(SIG(NK) )   !tabulate high-frequency stress: 3D table
+        IF (.NOT. ALLOCATED(TAUHFT2)) ALLOCATE(TAUHFT2(0:IUSTAR,0:IALPHA,0:ILEVTAIL))
+        IF (FLTABS) CALL TABU_TAUHF2(SIG(NK) )   !tabulate high-frequency stress: 3D table
       END IF
     END IF
     !
@@ -1148,7 +1160,7 @@ CONTAINS
     ! Precomputes the weights for the cumulative effect (TEST 441 and 500)
     !
     DIKCUMUL = 0
-    IF (SSDSC(3).NE.0) THEN
+    IF (SSDSC(3).LT.0.) THEN
       !       DIKCUMUL is the integer difference in frequency bands
       !       between the "large breakers" and short "wiped-out waves"
       DIKCUMUL = NINT(SSDSBRF1/(XFR-1.))
