@@ -61,13 +61,10 @@ fi
 #Move to top level directory of ww3:
 cd $ww3dir
 
-#Download from ftp (if not already present) and uptar:
-echo -e "Downloading (or finding) and untaring file from ftp:"
-if ! test -f ww3_from_ftp.${ww3ver}.tar.gz; then
-  wget --no-check-certificate https://ftp.emc.ncep.noaa.gov/static_files/public/WW3/ww3_from_ftp.${ww3ver}.tar.gz
-fi
+#Download from ftp and uptar:
+echo -e "Downloading and untaring file from ftp:"
+wget --no-check-certificate https://ftp.emc.ncep.noaa.gov/static_files/public/WW3/ww3_from_ftp.${ww3ver}.tar.gz
 tar -xvzf ww3_from_ftp.${ww3ver}.tar.gz
-
 
 #Move regtest info from data_regtests to regtests:
 echo -e "Moving data from data_regtests to regtests"
