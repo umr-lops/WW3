@@ -658,8 +658,9 @@ CONTAINS
         END IF
         DD     = DN - UD0(ISEA)
         IF (ABS(DD).GT.PI) DD = DD - TPI*SIGN(1.,DD)
-        UDI(ISEA) = DD
-        UAI(ISEA) = UAI(ISEA) - UA0(ISEA)
+        ! Compute delta of u- v- components
+        UAI(ISEA) = WXN(IX,IY) - WX0(IX,IY)
+        UDI(ISEA) = WYN(IX,IY) - WY0(IX,IY)
         AS0(ISEA) = DT0(IX,IY)
         ASI(ISEA) = DTN(IX,IY) - DT0(IX,IY)
       END DO
@@ -696,13 +697,17 @@ CONTAINS
     !
     DO ISEA=1, NSEA
       !
-      UA(ISEA) = UA0(ISEA) + RD * UAI(ISEA)
+      ! linear interpolation with u- v- components
+      IX        = MAPSF(ISEA,1)
+      IY        = MAPSF(ISEA,2) 
+      UA(ISEA) = ((WX0(IX,IY) + RD * UAI(ISEA)) **2 &
+                 +(WY0(IX,IY)+ RD * UDI(ISEA)) **2)**0.5
 #ifdef W3_WNT2
       UI2      = SQRT ( RD2 *      UA0(ISEA)**2 +             &
            RD  *(UA0(ISEA)+UAI(ISEA))**2 )
       UA(ISEA) = UA(ISEA) * MIN(1.25,UI2/MAX(1.E-7,UA(ISEA)))
 #endif
-      UD(ISEA) = UD0(ISEA) + RD * UDI(ISEA)
+      UD(ISEA)=MOD(TPI+ATAN2(WY0(IX,IY)+ RD * UDI(ISEA),WX0(IX,IY)+ RD * UAI(ISEA)),TPI)
 #ifdef W3_MGW
       UXR        = UA(ISEA)*COS(UD(ISEA)) + VGX
       UYR        = UA(ISEA)*SIN(UD(ISEA)) + VGY
