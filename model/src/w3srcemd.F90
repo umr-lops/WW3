@@ -1221,11 +1221,7 @@ CONTAINS
       ! 2.b Nonlinear interactions.
       !
 #ifdef W3_NL1
-      IF (IQTPE.GT.0) THEN
-        CALL W3SNL1 ( SPEC, CG1, WNMEAN*DEPTH, VSNL, VDNL )
-      ELSE
-        CALL W3SNLGQM ( SPEC, CG1, WN1, DEPTH, VSNL, VDNL )
-      END IF
+      CALL W3SNL1 ( SPEC, CG1, WNMEAN*DEPTH, VSNL, VDNL, U10ABS, EMEAN )
 #endif
 #ifdef W3_NL2
       CALL W3SNL2 ( SPEC, CG1, DEPTH, VSNL, VDNL )

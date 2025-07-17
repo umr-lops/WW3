@@ -116,6 +116,7 @@ MODULE W3GRIDMD
   !/    28-Feb-2023 : GQM as an alternative for NL1       ( version 7.15 )
   !/    11-Jan-2024 : New namelist parameters for IC4     ( version 7.15 )
   !/    03-May-2024 : New CAPCHNK parameters for SIN4     ( version 7.15 )
+  !/    18-Jul-2025 : Combination of DIA and GQM in NL1   ( version 7.15 )
   !/
   !/    Copyright 2009-2013 National Weather Service (NWS),
   !/       National Oceanic and Atmospheric Administration.  All rights
@@ -442,7 +443,7 @@ MODULE W3GRIDMD
   !             (2006) input and Babanin et al. (2001,2010) dissipation.
   !
   !     !/NL0   No nonlinear interactions.
-  !     !/NL1   Discrete interaction approximation (DIA or GQM).
+  !     !/NL1   Discrete interaction approximation (DIA and/or GQM).
   !     !/NL2   Exact interactions (WRT).
   !     !/NL3   Generalized Multiple DIA (GMD).
   !     !/NL4   Two Scale Approximation
@@ -877,7 +878,8 @@ MODULE W3GRIDMD
   REAL                    :: LAMBDA, KDCONV, KDMIN,               &
        SNLCS1, SNLCS2, SNLCS3
   INTEGER                 :: IQTYPE, GQMNF1, GQMNT1, GQMNQ_OM2
-  REAL                    :: TAILNL, GQMTHRSAT, GQMTHRCOU, GQAMP1, GQAMP2, GQAMP3, GQAMP4
+  REAL                    :: TAILNL, GQMTHRSAT, GQMTHRCOU,        &
+                             GQAMP1, GQAMP2, GQAMP3, GQAMP4
 #endif
 #ifdef W3_NL2
   INTEGER                 :: IQTYPE, NDEPTH
@@ -1011,9 +1013,10 @@ MODULE W3GRIDMD
 #endif
 #ifdef W3_NL1
   NAMELIST /SNL1/ LAMBDA, NLPROP, KDCONV, KDMIN,                  &
-       SNLCS1, SNLCS2, SNLCS3,                         &
-       IQTYPE, TAILNL, GQMNF1, GQMNT1,                 &
-       GQMNQ_OM2, GQMTHRSAT, GQMTHRCOU, GQAMP1, GQAMP2, GQAMP3, GQAMP4
+       SNLCS1, SNLCS2, SNLCS3,                                    &
+       IQTYPE, TAILNL, GQMNF1, GQMNT1, GQMNQ_OM2,                 &
+       GQMTHRSAT, GQMTHRCOU, GQAMP1, GQAMP2, GQAMP3, GQAMP4,      &
+       GQMDIA, GQMDIA_WND_THR, GQMDIA_HS_THR
 #endif
 #ifdef W3_NL2
   NAMELIST /SNL2/ IQTYPE, TAILNL, NDEPTH
@@ -1879,6 +1882,9 @@ CONTAINS
     GQAMP2=0.002
     GQAMP3=1.
     GQAMP4=1.
+    GQMDIA=0
+    GQMDIA_WND_THR=15
+    GQMDIA_HS_THR=6
     CALL READNL ( NDSS, 'SNL1', STATUS )
     WRITE (NDSO,922) STATUS
     WRITE (NDSO,923) LAMBDA, NLPROP, KDCONV, KDMIN,            &
@@ -3246,7 +3252,7 @@ CONTAINS
            SNLCS1, SNLCS2, SNLCS3,              &
            IQTYPE, TAILNL, GQMNF1,              &
            GQMNT1, GQMNQ_OM2, GQMTHRSAT, GQMTHRCOU,&
-           GQAMP1, GQAMP2, GQAMP3, GQAMP4
+           GQAMP1, GQAMP2, GQAMP3, GQAMP4, GQMDIA, GQMDIA_WND_THR, GQMDIA_HS_THR
 #endif
 #ifdef W3_NL2
       WRITE (NDSO,2922) IQTYPE, TAILNL, NDEPTH
@@ -6321,7 +6327,9 @@ CONTAINS
          '        IQTYPE =',I2,', TAILNL =',F5.1,','/      &
          '        GQMNF1 =',I2,', GQMNT1 =',I2,',',        &
          ' GQMNQ_OM2 =',I2,', GQMTHRSAT =',E11.4,', GQMTHRCOU =',F4.3,','/ &
-         '        GQAMP1 =',F5.3,', GQAMP2 =',F5.3,', GQAMP3 =',F5.3,', GQAMP4 =',F5.3,' /')
+         '        GQAMP1 =',F5.3,', GQAMP2 =',F5.3,', GQAMP3 =',F5.3,','/ &
+         '        GQAMP4 =',F5.3,', GQMDIA =',I2,','/ &
+         '        GQMDIA_WND_THR = ',F5.2,', GQMDIA_HS_THR = ',F5.2' /')
 #endif
     !
 #ifdef W3_NL2

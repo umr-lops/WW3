@@ -111,7 +111,123 @@ CONTAINS
 !> @author H. L. Tolman
 !> @date   06-Jun-2018
 !>
-  SUBROUTINE W3SNL1 (A, CG, KDMEAN, S, D)
+
+  SUBROUTINE W3SNL1 (A, CG, KDMEAN, S, D, U10ABS, EMEAN)
+    !/
+    !/                  +-----------------------------------+
+    !/                  | WAVEWATCH III           NOAA/NCEP |
+    !/                  |           H. L. Tolman            |
+    !/                  |       M. Benoit & F. Ardhuin      |
+    !/                  |                        FORTRAN 90 |
+    !/                  | Last update :         17-Jul-2025 |
+    !/                  +-----------------------------------+
+    !/
+    !/    17-Jul-2025 : Creation                            ( version 7.15 )
+    !/
+    !  1. Purpose :
+    !
+    !     Calls DIA or GQM to calculate 4-wave interaction source term
+    !
+    !  2. Method :
+    !
+    !     Uses threshold on wind speed and wave height to switch from GQM to DIA 
+    !     
+    !  3. Parameters :
+    !
+    !     Parameter list
+    !     ----------------------------------------------------------------
+    !       A       R.A.  I   Action spectrum A(ISP) as a function of
+    !                         direction (rad)  and wavenumber.
+    !       CG      R.A.  I   Group velocities (dimension NK).
+    !       KDMEAN  Real  I   Mean relative depth.
+    !       S       R.A.  O   Source term.                           *)
+    !       D       R.A.  O   Diagonal term of derivative.           *)
+    !     ----------------------------------------------------------------
+    !                             *) 1-D array with dimension NTH*NK
+    !
+    !  4. Subroutines used :
+    !
+    !      Name      Type  Module   Description
+    !     ----------------------------------------------------------------
+    !      STRACE    Subr. W3SERVMD Subroutine tracing.
+    !      PRT2DS    Subr. W3ARRYMD Print plot of spectra.
+    !      OUTMAT    Subr. W3WRRYMD Print out 2D matrix.
+    !     ----------------------------------------------------------------
+    !
+    !  5. Called by :
+    !
+    !      Name      Type  Module   Description
+    !     ----------------------------------------------------------------
+    !      W3SRCE    Subr. W3SRCEMD Source term integration.
+    !      W3EXPO    Subr.   N/A    Point output post-processor.
+    !      GXEXPO    Subr.   N/A    GrADS point output post-processor.
+    !     ----------------------------------------------------------------
+    !
+    !  6. Error messages :
+    !
+    !       None.
+    !
+    !  7. Remarks :
+    !
+    !       None.
+    !
+    !  8. Structure :
+    !
+    !     -------------------------------------------
+    !     -------------------------------------------
+    !
+    !  9. Switches :
+    !
+    !     !/S   Enable subroutine tracing.
+    !     !/T   Enable general test output.
+    !     !/T0  2-D print plot of source term.
+    !     !/T1  Print arrays.
+    !
+    ! 10. Source code :
+    !
+    !/ ------------------------------------------------------------------- /
+    !/
+    USE CONSTANTS
+    USE W3GDATMD, ONLY: NK, NTH, NSPEC, SIG, FACHFE,                &
+         KDCON, KDMN, SNLC1, SNLS1, SNLS2, SNLS3, GQMDIA, GQMDIA_HS_THR, GQMDIA_WND_THR
+
+    IMPLICIT NONE
+    !/
+    !/ ------------------------------------------------------------------- /
+    !/ Parameter list
+    !/
+    REAL, INTENT(IN)        :: A(NSPEC), CG(NK), KDMEAN, EMEAN, U10ABS
+    REAL, INTENT(OUT)       :: S(NSPEC), D(NSPEC)
+    !/
+    !/ ------------------------------------------------------------------- /
+    !/ Local parameters
+    !/
+    REAL :: VSNLDIA(NSPEC), VDNLDIA(NSPEC)
+    REAL :: VSNLGQM(NSPEC), VDNLGQM(NSPEC)
+    REAL, PARAMETER :: FACTHR2=1.33333
+    REAL :: HS, RAT
+    
+
+    HS=4*SQRT(EMEAN)
+    IF ((HS.LT.GQMDIA_HS_THR*FACTHR2.AND.U10ABS.LT.GQMDIA_WND_THR*FACTHR2).OR.GQMDIA.EQ.0)  CALL W3SNLDIA (A, CG, KDMEAN, VSNLDIA, VDNLDIA)
+    IF ((HS.LT.GQMDIA_HS_THR.AND.U10ABS.LT.GQMDIA_WND_THR).OR.GQMDIA.EQ.0) THEN 
+      S=VSNLDIA
+      D=VDNLDIA
+    ELSE 
+      CALL W3SNLGQM (A, CG, KDMEAN, VSNLGQM, VDNLGQM)
+      IF (HS.GT.GQMDIA_HS_THR*FACTHR2.OR.U10ABS.GT.GQMDIA_WND_THR*FACTHR2.OR.GQMDIA.EQ.2) THEN 
+        S=VSNLGQM
+        D=VDNLGQM
+      ELSE
+        RAT=(HS-GQMDIA_HS_THR)/(GQMDIA_HS_THR*(FACTHR2-1))*(U10ABS-GQMDIA_WND_THR)/(GQMDIA_WND_THR*(FACTHR2-1))
+        S=VSNLDIA*(1-RAT)+VSNLGQM*RAT
+        D=VDNLDIA*(1-RAT)+VDNLGQM*RAT
+      ENDIF
+    ENDIF   
+  END SUBROUTINE W3SNL1
+
+
+  SUBROUTINE W3SNLDIA (A, CG, KDMEAN, S, D)
     !/
     !/                  +-----------------------------------+
     !/                  | WAVEWATCH III           NOAA/NCEP |
@@ -469,7 +585,7 @@ CONTAINS
     !/
     !/ End of W3SNL1 ----------------------------------------------------- /
     !/
-  END SUBROUTINE W3SNL1
+  END SUBROUTINE W3SNLDIA
 !/ ------------------------------------------------------------------- /
 !>
 !> @brief Preprocessing for nonlinear interactions (weights).
@@ -785,7 +901,7 @@ CONTAINS
   END SUBROUTINE INSNL1
 
   !/ ------------------------------------------------------------------- /
-  SUBROUTINE W3SNLGQM(A,CG,WN,DEPTH,TSTOTn,TSDERn)
+  SUBROUTINE W3SNLGQM(A,CG,KDMEAN,TSTOTn,TSDERn)
     ! This and the following routines are adapted to WW3 from TOMAWAC qnlin3.f
     !***********************************************************************
     ! TOMAWAC   V6P1                                   24/06/2011
@@ -827,8 +943,8 @@ CONTAINS
 
     IMPLICIT NONE
 
-    REAL, intent(in) :: A(NTH,NK), CG(NK), WN(NK)
-    REAL, intent(in) :: DEPTH
+    REAL, intent(in) :: A(NTH,NK), CG(NK)
+    REAL, intent(in) :: KDMEAN
     REAL, intent(out) :: TSTOTn(NTH,NK), TSDERn(NTH,NK)
 
     INTEGER          :: ITH,IK,NT,NF
