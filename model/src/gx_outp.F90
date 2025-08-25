@@ -1206,7 +1206,7 @@ CONTAINS
         END IF
         IF ( FLSRCE(3) ) THEN
 #ifdef W3_NL1
-          CALL W3SNL1 ( A, CG, WNMEAN*DEPTH,      XNL, DIA )
+          CALL W3SNL1 ( A, CG, WNMEAN*DEPTH,      XNL, DIA, UABS, EMEAN )
 #endif
 #ifdef W3_NL2
           CALL W3SNL2 ( A, CG, DEPTH,             XNL, DIA )

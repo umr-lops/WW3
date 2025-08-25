@@ -1596,16 +1596,16 @@ CONTAINS
     IF ( WRITE ) THEN
       WRITE (NDSM)                                         &
            SNLC1, LAM, KDCON, KDMN, SNLS1, SNLS2, SNLS3,   &
-           IQTPE, NLTAIL, GQNF1, GQNT1,                    &
-           GQNQ_OM2, GQTHRSAT, GQTHRCOU, GQAMP
+           IQTPE, NLTAIL, GQNF1, GQNT1,  GQNQ_OM2,         &
+           GQTHRSAT, GQTHRCOU, GQAMP, GQMDIA, GQMDIA_HS_THR, GQMDIA_WND_THR
 #ifdef W3_ASCII
       WRITE (NDSA,*)                                       &
            'SNLC1, LAM, KDCON, KDMN, SNLS1, SNLS2, SNLS3,  &
            IQTPE, NLTAIL, GQNF1, GQNT1,                    &
            GQNQ_OM2, GQTHRSAT, GQTHRCOU, GQAMP:',          &
            SNLC1, LAM, KDCON, KDMN, SNLS1, SNLS2, SNLS3,   &
-           IQTPE, NLTAIL, GQNF1, GQNT1,                    &
-           GQNQ_OM2, GQTHRSAT, GQTHRCOU, GQAMP, GQMDIA, GQMDIA_HS_THR, GQMDIA_WND_THR
+           IQTPE, NLTAIL, GQNF1, GQNT1, GQNQ_OM2,          &
+           GQTHRSAT, GQTHRCOU, GQAMP, GQMDIA, GQMDIA_HS_THR, GQMDIA_WND_THR
 #endif
     ELSE
       READ (NDSM,END=801,ERR=802,IOSTAT=IERR)              &
@@ -1616,7 +1616,7 @@ CONTAINS
     IF ( FLTEST ) WRITE (NDST,9051) SNLC1, LAM,            &
          KDCON, KDMN, SNLS1, SNLS2, SNLS3,                 &
          IQTPE, NLTAIL, GQNF1, GQNT1, GQNQ_OM2,            &
-         GQTHRSAT, GQTHRCOU, GQAMP
+         GQTHRSAT, GQTHRCOU, GQAMP, GQMDIA, GQMDIA_HS_THR, GQMDIA_WND_THR
 #endif
     !
 #ifdef W3_NL2
