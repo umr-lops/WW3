@@ -30,7 +30,7 @@
 #  ./bin/run_test -s ST1  -w work_ST1 ../model ww3_ts1                         #
 #  ./bin/run_test -s ST2  -w work_ST2 ../model ww3_ts1                         #
 #  ./bin/run_test -s ST4 -o netcdf -N -w work_ST4 ../model ww3_ts1             #
-#  ./bin/run_test -s ST4 -o netcdf -N -w work_ST4_T700 -g ST4_T700 ../model ww3_ts1 #
+#  ./bin/run_cmake_test -s ST4 -o netcdf -N -w work_ST4 ../model ww3_ts1
 #  ./bin/run_test -s ST6 -o netcdf -w work_ST6 ../model ww3_ts1                #
 #  ./bin/run_test -c gnu -o netcdf ../model ww3_ts1                            #
 #                                                                              #
