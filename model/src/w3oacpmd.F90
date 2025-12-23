@@ -206,7 +206,7 @@ CONTAINS
     USE CONSTANTS, ONLY: RADIUS, DERA
     USE W3GDATMD,  ONLY: NX, NY, FLAGLL, XGRD, YGRD, MAPSTA, &
          & HPFAC, HQFAC, GTYPE, &
-         & UNGTYPE, RLGTYPE, CLGTYPE, SMCTYPE
+         & UNGTYPE, RLGTYPE, CLGTYPE, SMCTYPE, NSEA, NSEAL
 #ifdef W3_SMC
     USE W3GDATMD,  ONLY: NSEA, X0, Y0, MRFct, SX, SY, IJKCel
 #endif
@@ -327,15 +327,44 @@ CONTAINS
       ELSE
         !
         ! 1.3. Unstructured grids
+        ! same as regular and curvilinear grids
+        ! only for lon, lat and mask
         ! ----------------------------------
-        WRITE(*,*) 'TO BE IMPLEMENT FOR UNSTRUCTURED GRIDS'
-        STOP
+        IF (FLAGLL) THEN
+          FACTOR = 1.
+        ELSE
+          FACTOR = 1. / (RADIUS * DERA)
+        END IF
+        !
+        NNODES = NSEA
+        !
+        ALLOCATE ( LON(NNODES,1), LAT(NNODES,1) )
+        ALLOCATE ( MASK(NNODES,1) )
+        !
+        I = 0
+        DO I = 1, NNODES
+          !
+          ! lat/lon
+          LON(I,1) = XGRD(1,I)*FACTOR
+          LAT(I,1) = YGRD(1,I)*FACTOR
+          !
+          ! Model grid mask
+          ! Get the mask : 0 - sea  / 1 - open boundary cells (the land is already excluded)
+          IF ((MAPSTA(1,I) .EQ. 1)) THEN
+            MASK(I,1) = 0
+          ELSE
+            MASK(I,1) = 1
+          END IF
+        END DO
       END IF
       !
       CALL OASIS_WRITE_GRID('ww3t',NNODES,1,LON,LAT)
-      CALL OASIS_WRITE_CORNER('ww3t',NNODES,1,4,CORLON,CORLAT)
-      CALL OASIS_WRITE_AREA('ww3t',NNODES,1,AREA)
       CALL OASIS_WRITE_MASK('ww3t',NNODES,1,MASK)
+      !
+      IF (GTYPE .NE. UNGTYPE) THEN
+        CALL OASIS_WRITE_CORNER('ww3t',NNODES,1,4,CORLON,CORLAT)
+        CALL OASIS_WRITE_AREA('ww3t',NNODES,1,AREA)
+      ENDIF
       !
       ! 2. Terminate grid writing
       ! -------------------------
@@ -343,10 +372,13 @@ CONTAINS
       !
       DEALLOCATE(LON)
       DEALLOCATE(LAT)
-      DEALLOCATE(CORLON)
-      DEALLOCATE(CORLAT)
-      DEALLOCATE(AREA)
       DEALLOCATE(MASK)
+      !
+      IF (GTYPE .NE. UNGTYPE) THEN
+        DEALLOCATE(CORLON)
+        DEALLOCATE(CORLAT)
+        DEALLOCATE(AREA)
+      ENDIF
       !
     ENDIF
     !
@@ -425,41 +457,74 @@ CONTAINS
     !/ ------------------------------------------------------------------- /
     !/ Local parameters
     !/
-    INTEGER                 :: IB_I
+    INTEGER                 :: IB_I, IPART
     INTEGER                 :: IL_PART_ID      ! PartitionID
     INTEGER, ALLOCATABLE, DIMENSION(:)   :: ILA_PARAL       ! Description of the local partition in the global index space
     INTEGER, DIMENSION(4)   :: ILA_SHAPE       ! Vector giving the min & max index for each dim of the fields
     INTEGER, DIMENSION(2)   :: ILA_VAR_NODIMS  ! rank of fields & number of bundles (1 with OASIS3-MCT)
     INTEGER                 :: ISEA, JSEA, IX, IY
+    INTEGER                 :: NHXW, NHXE, NHYS, NHYN  ! size of the halo at the western, eastern, southern, northern boundaries
     !/
     !/ ------------------------------------------------------------------- /
     !/ Executable part
     !/
     !
-    ALLOCATE(ILA_PARAL(2+NSEAL))
-    !
-    ! * Define the partition : OASIS POINTS partition
-    ILA_PARAL(1) = 4
-    !
-    ! * total number of segments of the global domain
-    ILA_PARAL(2) = NSEAL
-    !
     IF (GTYPE .EQ. RLGTYPE .OR. GTYPE .EQ. CLGTYPE) THEN
       !
       ! 1.1. regular and curvilinear grids
       ! ----------------------------------
-      DO JSEA=1, NSEAL
-        CALL INIT_GET_ISEA(ISEA,JSEA)
-
-        IX = MAPSF(ISEA,1)
-        IY = MAPSF(ISEA,2)
-        ILA_PARAL(JSEA+2) = (IY - 1)*NX + IX
-      END DO
+      IPART=4
+      IF (IPART == 3) THEN
+        NHXW = 1 ; NHXE = NX ; NHYS = 1 ; NHYN = NY
+        NHXW = NHXW - 1
+        NHXE = NX - NHXE
+        NHYS = NHYS - 1
+        NHYN = NY - NHYN
+        !
+        ! * allocate : OASIS orange partition
+        ALLOCATE(ILA_PARAL(2+NSEAL*2))
+        !
+        ! * Define the partition : OASIS ORANGE partition
+        ILA_PARAL(1) = 3
+        ! * total number of segments of the global domain
+        ILA_PARAL(2) = NSEAL
+        !
+        DO JSEA=1, NSEAL
+          CALL INIT_GET_ISEA(ISEA,JSEA)
+          IX = MAPSF(ISEA,1)
+          IY = MAPSF(ISEA,2)
+          ILA_PARAL(JSEA*2+1) = (IY - NHYN -1)*(NX - NHXE - NHXW) + (IX - NHXW - 1)
+          ILA_PARAL(JSEA*2+2) = 1
+        END DO
+        !
+      ELSE IF (IPART == 4) THEN
+        ! * allocate : OASIS point partition
+        ALLOCATE(ILA_PARAL(2+NSEAL))
+        ! * Define the partition : OASIS POINTS partition
+        ILA_PARAL(1) = 4
+        ! * total number of segments of the global domain
+        ILA_PARAL(2) = NSEAL
+        !
+        DO JSEA=1, NSEAL
+          CALL INIT_GET_ISEA(ISEA,JSEA)
+          IX = MAPSF(ISEA,1)
+          IY = MAPSF(ISEA,2)
+          ILA_PARAL(JSEA+2) = (IY - 1)*NX + IX
+        END DO
+      ENDIF
+      !
 #ifdef W3_SMC
     ELSE IF( GTYPE .EQ. SMCTYPE ) THEN
       !
       ! 1.2. SMC grids
       ! ----------------------------------
+      ALLOCATE(ILA_PARAL(2+NSEAL))
+      !
+      ! * Define the partition : OASIS POINTS partition
+      ILA_PARAL(1) = 4
+      ! * total number of segments of the global domain
+      ILA_PARAL(2) = NSEAL
+      !
       DO JSEA=1, NSEAL
         ILA_PARAL(JSEA+2) = IAPROC + (JSEA-1)*NAPROC
       ENDDO
@@ -469,27 +534,72 @@ CONTAINS
       !
       ! 1.3. Unstructured grids
       ! ----------------------------------
-      WRITE(*,*) 'TO BE VERIFIED FOR UNSTRUCTURED GRIDS'
-      STOP
-      !
-      DO JSEA=1,NSEAL
-        ILA_PARAL(JSEA+2) = IAPROC + (JSEA-1)*NAPROC
-      END DO
+#ifdef W3_PDLIB
+      IPART = 4 ! USING POINT PARTITION FOR UNSTRUCTURED DD 
+      IF (IPART == 3) THEN
+      ! * allocate : OASIS ORANGE partition
+        ALLOCATE(ILA_PARAL(2+NP*2))
+      ! * Define the partition : OASIS ORANGE partition
+        ILA_PARAL(1) = 3
+      ! * total number of segments of the global domain
+        ILA_PARAL(2) = NP
+        DO JSEA = 1, NP
+          CALL INIT_GET_ISEA(ILA_PARAL(JSEA*2+1),JSEA)
+          ILA_PARAL(JSEA*2+2) = 1
+        END DO
+      ELSE IF (IPART == 4) THEN
+      ! * allocate : OASIS POINT partition
+        ALLOCATE(ILA_PARAL(2+NP))
+      ! * Define the partition : OASIS POINTS partition
+        ILA_PARAL(1) = 4
+      ! * total number of segments of the global domain
+        ILA_PARAL(2) = NP
+        DO JSEA = 1, NP
+          CALL INIT_GET_ISEA(ILA_PARAL(JSEA+2),JSEA)
+        ENDDO
+      ENDIF
+#else
+      IPART = 4
+      IF (IPART == 3) THEN
+      ! * allocate : OASIS ORANGE partition
+        ALLOCATE(ILA_PARAL(2+NSEAL*2))
+      ! * Define the partition : OASIS ORANGE partition
+        ILA_PARAL(1) = 3
+      ! * total number of segments of the global domain
+        ILA_PARAL(2) = NSEAL
+        DO JSEA = 1, NSEAL
+          CALL INIT_GET_ISEA(ILA_PARAL(JSEA*2+1),JSEA)
+          ILA_PARAL(JSEA*2+2) = 1
+        END DO
+      ELSE IF (IPART == 4) THEN
+      ! * allocate : OASIS POINT partition
+        ALLOCATE(ILA_PARAL(2+NSEAL))
+      ! * Define the partition : OASIS POINTS partition
+        ILA_PARAL(1) = 4
+      ! * total number of segments of the global domain
+        ILA_PARAL(2) = NSEAL
+        DO JSEA = 1, NSEAL
+          CALL INIT_GET_ISEA(ILA_PARAL(JSEA+2),JSEA)
+        ENDDO
+      ENDIF
+#endif
       !
     ENDIF
     !
     ! 2. Partition definition
     ! ----------------------------------
-    CALL OASIS_DEF_PARTITION(IL_PART_ID, ILA_PARAL,IL_ERR,NNODES)
+    CALL OASIS_DEF_PARTITION(IL_PART_ID, ILA_PARAL, IL_ERR, NSEA)
     IF(IL_ERR /= 0) THEN
       CALL OASIS_ABORT(IL_COMPID, 'CPL_OASIS_DEFINE', 'Problem during oasis_def_partition')
     ENDIF
     !
-    DEALLOCATE(ILA_PARAL)
-    !
     ! 3. Coupling fields declaration
     ! ----------------------------------
+#ifdef W3_PDLIB
+    ILA_SHAPE(:) = (/1, NP, 1, 1 /)
+#else
     ILA_SHAPE(:) = (/1, NSEAL, 1, 1 /)
+#endif
     !
     ILA_VAR_NODIMS(1) = 2    ! rank of fields array
     ILA_VAR_NODIMS(2) = 1    ! always 1 with OASIS3-MCT 2.0
