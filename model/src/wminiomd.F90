@@ -1626,7 +1626,7 @@ CONTAINS
 #ifdef W3_MPI
         ITAG   = HGSTGE(J,IMOD)%ISEND(I,5) + IT0
         IF ( ITAG .GT. MTAG2 ) THEN
-          WRITE (MDSE,1001)
+          WRITE (MDSE,1001) ITAG, MTAG2
           CALL EXTCDE (1001)
         END IF
 #endif
@@ -1675,8 +1675,8 @@ CONTAINS
     ! Formats
     !
 #ifdef W3_MPI
-1001 FORMAT (/' *** ERROR WMIOHS : REQUESTED MPI TAG EXCEEDS', &
-         ' UPPER BOUND (MTAG2) ***')
+1001 FORMAT (/' *** ERROR WMIOHS : REQUESTED MPI TAG',I9,'EXCEEDS', &
+         ' UPPER BOUND (MTAG2)',I9,' ***')
 #endif
 #ifdef W3_T
 9000 FORMAT ( ' TEST WMIOHS : STAGING DATA FROM GRID ',I3,        &
@@ -2712,7 +2712,7 @@ CONTAINS
         IP     = EQSTGE(J,IMOD)%SIP(I)
         ITAG   = EQSTGE(J,IMOD)%STG(I) + IT0
         IF ( ITAG .GT. MTAG_UB ) THEN
-          WRITE (MDSE,1001)
+          WRITE (MDSE,1001) ITAG, MTAG_UB
           CALL EXTCDE (1001)
         END IF
 #endif
@@ -2776,8 +2776,8 @@ CONTAINS
     ! Formats
     !
 #ifdef W3_MPI
-1001 FORMAT (/' *** ERROR WMIOES : REQUESTED MPI TAG EXCEEDS', &
-         ' UPPER BOUND (MTAG_UB) ***')
+1001 FORMAT (/' *** ERROR WMIOES : REQUESTED MPI TAG',I9,'EXCEEDS', &
+         ' UPPER BOUND (MTAG_UB)',I9,' ***')
 #endif
 #ifdef W3_T
 9000 FORMAT ( ' TEST WMIOES : STAGING DATA FROM GRID ',I3)
