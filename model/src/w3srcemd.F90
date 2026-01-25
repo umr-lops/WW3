@@ -500,7 +500,7 @@ CONTAINS
          DTMIN, FACTI1, FACTI2, FACSD, FACHFA, FACP, &
          XFC, XFLT, XREL, XFT, FXFM, FXPM, DDEN,     &
          FTE, FTF, FHMAX, ECOS, ESIN, IICEDISP,      &
-         ICESCALES, IICESMOOTH
+         ICESCALES, IICESMOOTH, GQMDIAFAC1, GQMDIAFAC2
     USE W3GDATMD, ONLY: IC_NUMERICS
     USE W3WDATMD, ONLY: TIME
     USE W3ODATMD, ONLY: NDSE, NDST, IAPROC
@@ -566,7 +566,7 @@ CONTAINS
 #endif
 #ifdef W3_NL1
     USE W3SNL1MD
-    USE W3GDATMD, ONLY: IQTPE
+    USE W3GDATMD, ONLY: IQTPE, GQMDIA , GQMDIAFIN, GQMDIAFDS
 #endif
 #ifdef W3_NL2
     USE W3SNL2MD
@@ -706,6 +706,7 @@ CONTAINS
          VSDS(NSPEC), VDDS(NSPEC),            &
          VSBT(NSPEC), VDBT(NSPEC)
     REAL :: VS(NSPEC), VD(NSPEC), EB(NK)
+    REAL :: GQMRATIO
 
     LOGICAL :: SHAVE
     LOGICAL :: LBREAK
@@ -854,6 +855,7 @@ CONTAINS
 #if defined(W3_LN0) || defined(W3_LN1) || defined(W3_SEED)
     VSLN = 0.
 #endif
+GQMRATIO = -1.
 
 #if defined(W3_ST0) || defined(W3_ST3) || defined(W3_ST4)
     VSIN = 0.
@@ -1227,9 +1229,9 @@ CONTAINS
       !
 #ifdef W3_NL1
       IF (IQTPE.GT.0) THEN
-        CALL W3SNL1 ( SPEC, CG1, WNMEAN*DEPTH, VSNL, VDNL )
+        CALL W3SNLDIA ( SPEC, CG1, WNMEAN*DEPTH, VSNL, VDNL )
       ELSE
-        CALL W3SNLGQM ( SPEC, CG1, WN1, DEPTH, VSNL, VDNL )
+        CALL W3SNL1 ( SPEC, CG1, WN1, DEPTH, VSNL, VDNL, GQMRATIO )
       END IF
 #endif
 #ifdef W3_NL2
@@ -1413,6 +1415,13 @@ CONTAINS
       !             SIN = (1-ICE)**ISCALEIN*SIN and SDS=(1-ICE)**ISCALEDS*SDS ------------------ *
       !     INFLAGS2(4) is true if ice concentration was ever read during
       !             this simulation
+#ifdef W3_NL1
+      IF ( GQMRATIO.GE.0 ) THEN
+        VSIN(1:NSPECH) = (1+(1-GQMRATIO)*GQMDIAFIN) * VSIN(1:NSPECH)
+        VDIN(1:NSPECH) = (1+(1-GQMRATIO)*GQMDIAFIN) * VDIN(1:NSPECH)
+        VSDS(1:NSPECH) = (1+(1-GQMRATIO)*GQMDIAFDS) * VSDS(1:NSPECH)
+        VDDS(1:NSPECH) = (1+(1-GQMRATIO)*GQMDIAFDS) * VDDS(1:NSPECH)
+#endif
       IF ( INFLAGS2(4) ) THEN
         VSNL(1:NSPECH) = ICESCALENL * VSNL(1:NSPECH)
         VDNL(1:NSPECH) = ICESCALENL * VDNL(1:NSPECH)

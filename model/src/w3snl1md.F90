@@ -38,6 +38,7 @@ MODULE W3SNL1MD
   !/    03-Sep-2012 : Clean up of test output T0, T1      ( version 4.07 )
   !/    28-Feb-2023 : Adds GQM separate routines          ( version 7.07 )
   !/    04-Jul-2025 : Remove labelled statements          ( version X.XX )
+  !/    24-Jan-2026 : Combination of GQM and DIA          ( version X.XX )
   !/
   !/    Copyright 2009 National Weather Service (NWS),
   !/       National Oceanic and Atmospheric Administration.  All rights
@@ -113,7 +114,7 @@ CONTAINS
 !> @date   06-Jun-2018
 !>
 
-  SUBROUTINE W3SNL1 (A, CG, KDMEAN, S, D, U10ABS, EMEAN)
+  SUBROUTINE W3SNL1 (A, CG, KDMEAN, S, D, U10ABS, EMEAN, GQMRATIO)
     !/
     !/                  +-----------------------------------+
     !/                  | WAVEWATCH III           NOAA/NCEP |
@@ -198,7 +199,7 @@ CONTAINS
     !/ Parameter list
     !/
     REAL, INTENT(IN)        :: A(NSPEC), CG(NK), KDMEAN, EMEAN, U10ABS
-    REAL, INTENT(OUT)       :: S(NSPEC), D(NSPEC)
+    REAL, INTENT(OUT)       :: S(NSPEC), D(NSPEC), GQMRATIO
     !/
     !/ ------------------------------------------------------------------- /
     !/ Local parameters
@@ -206,7 +207,7 @@ CONTAINS
     REAL :: VSNLDIA(NSPEC), VDNLDIA(NSPEC)
     REAL :: VSNLGQM(NSPEC), VDNLGQM(NSPEC)
     REAL, PARAMETER :: FACTHR2=1.33333
-    REAL :: HS, RAT
+    REAL :: HS
     
 
     HS=4*SQRT(EMEAN)
@@ -214,15 +215,17 @@ CONTAINS
     IF ((HS.LT.GQMDIA_HS_THR.AND.U10ABS.LT.GQMDIA_WND_THR).OR.GQMDIA.EQ.0) THEN 
       S=VSNLDIA
       D=VDNLDIA
+      GQMRATIO=0
     ELSE 
       CALL W3SNLGQM (A, CG, KDMEAN, VSNLGQM, VDNLGQM)
       IF (HS.GT.GQMDIA_HS_THR*FACTHR2.OR.U10ABS.GT.GQMDIA_WND_THR*FACTHR2.OR.GQMDIA.EQ.2) THEN 
         S=VSNLGQM
         D=VDNLGQM
+        GQMRATIO=1
       ELSE
-        RAT=(HS-GQMDIA_HS_THR)/(GQMDIA_HS_THR*(FACTHR2-1))*(U10ABS-GQMDIA_WND_THR)/(GQMDIA_WND_THR*(FACTHR2-1))
-        S=VSNLDIA*(1-RAT)+VSNLGQM*RAT
-        D=VDNLDIA*(1-RAT)+VDNLGQM*RAT
+        GQMRATIO=(HS-GQMDIA_HS_THR)/(GQMDIA_HS_THR*(FACTHR2-1))*(U10ABS-GQMDIA_WND_THR)/(GQMDIA_WND_THR*(FACTHR2-1))
+        S=VSNLDIA*(1-GQMRATIO)+VSNLGQM*GQMRATIO
+        D=VDNLDIA*(1-GQMRATIO)+VDNLGQM*GQMRATIO
       ENDIF
     ENDIF   
   END SUBROUTINE W3SNL1

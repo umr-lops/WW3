@@ -1637,23 +1637,22 @@ CONTAINS
     IF ( WRITE ) THEN
       WRITE (NDSM)                                         &
            SNLC1, LAM, KDCON, KDMN, SNLS1, SNLS2, SNLS3,   &
-           IQTPE, NLTAIL, GQNF1, GQNT1,                    &
-           GQNQ_OM2, GQTHRSAT, GQTHRCOU, GQAMP
+           IQTPE, NLTAIL, GQNF1, GQNT1,  GQNQ_OM2,         &
+           GQTHRSAT, GQTHRCOU, GQAMP, GQMDIA, GQMDIA_HS_THR, GQMDIA_WND_THR, GQMDIAFIN, GQMDIAFDS
 #ifdef W3_ASCII
       WRITE (NDSA,*)                                       &
            'SNLC1, LAM, KDCON, KDMN, SNLS1, SNLS2, SNLS3,  &
            IQTPE, NLTAIL, GQNF1, GQNT1,                    &
            GQNQ_OM2, GQTHRSAT, GQTHRCOU, GQAMP:',          &
            SNLC1, LAM, KDCON, KDMN, SNLS1, SNLS2, SNLS3,   &
-           IQTPE, NLTAIL, GQNF1, GQNT1,                    &
-           GQNQ_OM2, GQTHRSAT, GQTHRCOU, GQAMP
+           IQTPE, NLTAIL, GQNF1, GQNT1, GQNQ_OM2,          &
+           GQTHRSAT, GQTHRCOU, GQAMP, GQMDIA, GQMDIA_HS_THR, GQMDIA_WND_THR, GQMDIAFIN, GQMDIAFDS
 #endif
     ELSE
       READ (NDSM,IOSTAT=IERR)                              &
            SNLC1, LAM, KDCON, KDMN, SNLS1, SNLS2, SNLS3,   &
            IQTPE, NLTAIL, GQNF1, GQNT1,                    &
-           GQNQ_OM2, GQTHRSAT, GQTHRCOU, GQAMP
-      IF (IERR.NE.0) CALL EXTIOF(NDSE,IERR,'W3IOGR','mod_def.'//FILEXT(:IEXT),51)
+           GQNQ_OM2, GQTHRSAT, GQTHRCOU, GQAMP, GQMDIA, GQMDIA_HS_THR, GQMDIA_WND_THR, GQMDIAFIN, GQMDIAFDS
     END IF
     IF ( FLTEST ) WRITE (NDST,*)                           &
            'SNLC1, LAM, KDCON, KDMN, SNLS1, SNLS2, SNLS3,  &
@@ -1661,7 +1660,7 @@ CONTAINS
            GQNQ_OM2, GQTHRSAT, GQTHRCOU, GQAMP:',          &
            SNLC1, LAM, KDCON, KDMN, SNLS1, SNLS2, SNLS3,   &
            IQTPE, NLTAIL, GQNF1, GQNT1,                    &
-           GQNQ_OM2, GQTHRSAT, GQTHRCOU, GQAMP
+           GQNQ_OM2, GQTHRSAT, GQTHRCOU, GQAMP, GQMDIA, GQMDIA_HS_THR, GQMDIA_WND_THR, GQMDIAFIN, GQMDIAFDS
 #endif
     !
 #ifdef W3_NL2
@@ -1788,11 +1787,8 @@ CONTAINS
     !
 #ifdef W3_NL1
     IF ( .NOT. WRITE ) THEN
-      IF (IQTPE.GT.0) THEN
-        CALL INSNL1 ( IGRD )
-      ELSE
-        CALL INSNLGQM
-      END IF
+      IF (GQMDIA.LT.2) CALL INSNL1 ( IGRD )
+      IF (GQMDIA.GT.0) CALL INSNLGQM
     END IF
 #endif
 #ifdef W3_NL3
