@@ -932,6 +932,7 @@ MODULE W3GDATMD
          SNLS1, SNLS2, SNLS3
     INTEGER               :: IQTPE, GQNF1, GQNT1, GQNQ_OM2, GQMDIA
     REAL                  :: NLTAIL, GQTHRSAT, GQTHRCOU, GQAMP(4), GQMDIA_WND_THR, GQMDIA_HS_THR
+    REAL                  :: GQMDIAFIN, GQMDIAFDS
 #endif
 #ifdef W3_NL2
     INTEGER               :: IQTPE, NDPTHS
