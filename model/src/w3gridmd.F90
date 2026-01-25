@@ -6363,7 +6363,7 @@ CONTAINS
          ' GQMNQ_OM2 =',I2,', GQMTHRSAT =',E11.4,', GQMTHRCOU =',F4.3,','/ &
          '        GQAMP1 =',F5.3,', GQAMP2 =',F5.3,', GQAMP3 =',F5.3,', GQAMP4 =',F5.3,','/      &
          '        GQMDIA =',I2,', GQMDIA_WND_THR=',F5.3,', GQMDIA_HS_THR=',F5.3,','/      &
-         ', GQMDIAFIN=,',F4.2', GQMDIAFDS=,',F4.2,' /')
+         ', GQMDIAFIN=,',F4.2,', GQMDIAFDS=,',F4.2,' /')
 #endif
     !
 #ifdef W3_NL2

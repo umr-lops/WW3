@@ -1690,6 +1690,7 @@ CONTAINS
 #endif
     !
     DATA VAR1   / 'Sin ' , 'Snl ', 'Sds ' , 'Sbt ' , 'Sice', 'Stot' /
+    REAL                   :: GQMRATIO
 
 
 
@@ -1712,6 +1713,7 @@ CONTAINS
     XH     =  XFR - 1.
     XL2    = XL**2
     XH2    = XH**2
+    GQMRATIO=0
     !
     IF ( ITYPE .EQ. 3 ) THEN
       XLN = 0.
@@ -2422,11 +2424,11 @@ CONTAINS
             END IF
             IF ( FLSRCE(3) ) THEN
 #ifdef W3_NL1
-              IF (IQTPE.GT.0) THEN
-                CALL W3SNL1 ( A, CG, WNMEAN*DEPTH,  XNL, DIA )
-              ELSE
-                CALL W3SNLGQM ( A, CG, WN, DEPTH,  XNL, DIA )
-              END IF
+          IF (GQMDIA.EQ.0) THEN
+            CALL W3SNLDIA ( A, CG, WNMEAN*DEPTH, XNL, DIA )
+          ELSE
+            CALL W3SNL1 ( A, CG, WNMEAN*DEPTH, XNL, DIA, UABS, EMEAN, GQMRATIO )
+          END IF
 #endif
 #ifdef W3_NL2
               CALL W3SNL2 ( A, CG, DEPTH,         XNL, DIA )

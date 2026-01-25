@@ -806,6 +806,7 @@ CONTAINS
     REAL                   :: LAMBDA(NSPEC)
 #endif
     CHARACTER               :: DTME21*23
+    REAL                   :: GQMRATIO
     !/
     !/ ------------------------------------------------------------------- /
     !/
@@ -830,6 +831,7 @@ CONTAINS
     XWL = 0.
     XIS = 0.
     XXX = 0.
+    GQMRATIO=0
     !
 #ifdef W3_T
     WRITE (NDST,9000) (FLREQ(J),J=1,NOPTS)
@@ -1179,7 +1181,11 @@ CONTAINS
         END IF
         IF ( FLSRCE(3) ) THEN
 #ifdef W3_NL1
-          CALL W3SNL1 ( A, CG, WNMEAN*DEPTH,      XNL, DIA )
+          IF (GQMDIA.EQ.0) THEN
+            CALL W3SNLDIA ( A, CG, WNMEAN*DEPTH, XNL, DIA )
+          ELSE
+            CALL W3SNL1 ( A, CG, WNMEAN*DEPTH, XNL, DIA, UABS, EMEAN, GQMRATIO )
+          END IF
 #endif
 #ifdef W3_NL2
           CALL W3SNL2 ( A, CG, DEPTH,             XNL, DIA )
