@@ -1892,7 +1892,7 @@ CONTAINS
     GQAMP3=1.
     GQAMP4=1.
     GQMDIA=0
-    GQMDIA_WND_THR=15
+    GQMDIA_WND_THR=15.
     GQMDIA_HS_THR=6
     GQMDIAFIN = 1.24
     GQMDIAFDS = 1.52
@@ -6362,7 +6362,7 @@ CONTAINS
          '        GQMNF1 =',I2,', GQMNT1 =',I2,',',        &
          ' GQMNQ_OM2 =',I2,', GQMTHRSAT =',E11.4,', GQMTHRCOU =',F4.3,','/ &
          '        GQAMP1 =',F5.3,', GQAMP2 =',F5.3,', GQAMP3 =',F5.3,', GQAMP4 =',F5.3,','/      &
-         '        GQMDIA =',I2,', GQMDIA_WND_THR=',F5.3,', GQMDIA_HS_THR=',F5.3,','/      &
+         '        GQMDIA =',I2,', GQMDIA_WND_THR=',F5.1,', GQMDIA_HS_THR=',F5.1,','/      &
          ', GQMDIAFIN=,',F4.2,', GQMDIAFDS=,',F4.2,' /')
 #endif
     !
