@@ -224,7 +224,7 @@ CONTAINS
       ELSE
         R1=(HS    -GQMDIA_HS_THR )/(GQMDIA_HS_THR*(FACTHR2-1))
         R2=(U10ABS-GQMDIA_WND_THR)/(GQMDIA_WND_THR*(FACTHR2-1))
-        GQMRATIO=MAX(R1,R2)
+        GQMRATIO=MIN(1.,MAX(0.,MAX(R1,R2)))
         S=VSNLDIA*(1-GQMRATIO)+VSNLGQM*GQMRATIO
         D=VDNLDIA*(1-GQMRATIO)+VDNLGQM*GQMRATIO
       ENDIF
@@ -2258,9 +2258,7 @@ CONTAINS
     !
     !..... counts the fraction of the eliminated configurations
     ELIM=(1.D0-DBLE(NCONF)/DBLE(NCONFM))*100.D0
-#ifdef W3_TGQM
-    WRITE(994,*) 'GQM, quadruplet configurations:',NCONF,ELIM
-#endif
+    WRITE(*,*) 'GQM, quadruplet configurations:',NCONFM,NCONF,ELIM
   END SUBROUTINE INSNLGQM
   !/
   !/ End of module W3SNL1MD -------------------------------------------- /

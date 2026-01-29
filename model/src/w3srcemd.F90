@@ -1416,7 +1416,7 @@ GQMRATIO = -1.
       !     INFLAGS2(4) is true if ice concentration was ever read during
       !             this simulation
 #ifdef W3_NL1
-      IF ( GQMRATIO.GE.0 ) THEN
+      IF ( GQMRATIO.GE.0.AND.GQMRATIO.LT.0.99 ) THEN
         VSIN(1:NSPECH) = (1+(1-GQMRATIO)*GQMDIAFIN) * VSIN(1:NSPECH)
         VDIN(1:NSPECH) = (1+(1-GQMRATIO)*GQMDIAFIN) * VDIN(1:NSPECH)
         VSDS(1:NSPECH) = (1+(1-GQMRATIO)*GQMDIAFDS) * VSDS(1:NSPECH)
