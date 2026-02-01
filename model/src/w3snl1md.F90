@@ -1015,7 +1015,7 @@ CONTAINS
     !     JFMAX IS GIVEN BY Fmax=FREQ(NF)*Gamma_max
     !     TESTS HAVE SHOWN THAT IT CAN BE ASSUMED Gamma_min=1. (JFMIN=1) AND
     !     Gamma_max=1.3 (JFMAX>NF) TO OBTAIN IMPROVED RESULTS
-    !     Note by Fabrice Ardhuin: this appears to give the difference in tail benaviour with Gerbrant's WRT
+    !     Note by Fabrice Ardhuin: this appears to give the difference in tail benaviour with the WRT code by Gerbrant van Vledder
     !=======================================================================
     JFMIN=MAX(1-INT(LOG(1.0D0)/LOG(RAISF)),1)
     JFMAX=MIN(NF+INT(LOG(1.3D0)/LOG(RAISF)),NK)
@@ -1038,8 +1038,9 @@ CONTAINS
     !=======================================================================
     ACCMAX=0.
     DO JF=JFMIN,JFMAX
-      SUME=SUM(F(:,JF))*DTH
-      SATVAL(JF) = SUME*FREQ(JF)**5
+      JF1=MIN(JF+NINT(LOG(1.27)/LOG(XFR)),JFMAX)
+      SUME=SUM(F(:,JF1))*DTH
+      SATVAL(JF1) = SUME*FREQ(JF1)**5
       ACCVAL = SUME*FREQ(JF)**4
       IF (ACCVAL.GT.ACCMAX) ACCMAX=ACCVAL
     END DO
