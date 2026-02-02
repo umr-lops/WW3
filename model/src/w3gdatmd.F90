@@ -443,6 +443,7 @@ MODULE W3GDATMD
   !      GQNT1     Int.  Public   Gaussian quadrature resolution
   !      GQNNQ_OM2 Int.  Public   Gaussian quadrature resolution
   !      GQTHRSAT  Real  Public   Threshold on saturation for SNL calculation
+  !      GQFRESAT  Real  Public   Frequency ratio for application of saturation threshold
   !      GQTHRCOU  Real  Public   Threshold for filter on coupling coefficient
   !      GQAMP     R.A.  Public   Amplification factors
   !                                                             (!/NL2)
@@ -931,7 +932,7 @@ MODULE W3GDATMD
     REAL                  :: SNLC1, LAM, KDCON, KDMN,             &
          SNLS1, SNLS2, SNLS3
     INTEGER               :: IQTPE, GQNF1, GQNT1, GQNQ_OM2, GQMDIA
-    REAL                  :: NLTAIL, GQTHRSAT, GQTHRCOU, GQAMP(4), GQMDIA_WND_THR, GQMDIA_HS_THR
+    REAL                  :: NLTAIL, GQTHRSAT, GQFRESAT, GQTHRCOU, GQAMP(4), GQMDIA_WND_THR, GQMDIA_HS_THR
     REAL                  :: GQMDIAFIN, GQMDIAFDS
 #endif
 #ifdef W3_NL2
@@ -1348,7 +1349,7 @@ MODULE W3GDATMD
   !/
 #ifdef W3_NL1
   INTEGER, POINTER        :: IQTPE, GQNF1, GQNT1, GQNQ_OM2, GQMDIA
-  REAL, POINTER           :: NLTAIL, GQTHRSAT, GQTHRCOU, GQAMP(:), GQMDIA_WND_THR, GQMDIA_HS_THR
+  REAL, POINTER           :: NLTAIL, GQTHRSAT, GQFRESAT, GQTHRCOU, GQAMP(:), GQMDIA_WND_THR, GQMDIA_HS_THR
   REAL, POINTER           :: SNLC1, LAM, KDCON, KDMN, SNLS1, SNLS2, SNLS3
   REAL, POINTER           :: GQMDIAFIN, GQMDIAFDS
 #endif
@@ -2742,6 +2743,7 @@ CONTAINS
     GQNQ_OM2  => MPARS(IMOD)%SNLPS%GQNQ_OM2
     NLTAIL => MPARS(IMOD)%SNLPS%NLTAIL
     GQTHRSAT => MPARS(IMOD)%SNLPS%GQTHRSAT
+    GQFRESAT => MPARS(IMOD)%SNLPS%GQFRESAT
     GQTHRCOU=> MPARS(IMOD)%SNLPS%GQTHRCOU
     GQAMP=> MPARS(IMOD)%SNLPS%GQAMP
     GQMDIA=> MPARS(IMOD)%SNLPS%GQMDIA

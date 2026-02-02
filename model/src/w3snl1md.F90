@@ -955,7 +955,7 @@ CONTAINS
     !==================================================================================
     !     This subroutine is same as qnlin3 in TOMWAC
     USE CONSTANTS, ONLY: TPI
-    USE W3GDATMD,  ONLY: SIG, NK ,  NTH , DTH, XFR, FR1, GQTHRSAT, GQAMP
+    USE W3GDATMD,  ONLY: SIG, NK ,  NTH , DTH, XFR, FR1, GQTHRSAT, GQFRESAT, GQAMP
 
     IMPLICIT NONE
 
@@ -972,7 +972,7 @@ CONTAINS
     !.....LOCAL VARIABLES
     INTEGER             JF    , JT    , JF1   , JT1  , IQ_OM2 &
          , JFM0  , JFM1  , JFM2  , JFM3  , IXF1 , IXF2   &
-         , IXF3  , JFMIN , JFMAX , ICONF , LBUF
+         , IXF3  , JFMIN , JFMAX , JFMINS, ICONF , LBUF
     INTEGER            KT1P  , KT1M  , JT1P  , JT1M  , KT1P2P, KT1P2M &
          , KT1P3P, KT1P3M, KT1M2P, KT1M2M, KT1M3P, KT1M3M &
          , JT1P2P, JT1P2M, JT1P3P, JT1P3M, JT1M2P, JT1M2M &
@@ -1037,15 +1037,18 @@ CONTAINS
     TSDER = 0.
     !=======================================================================
     ACCMAX=0.
+    JFMINS=JFMAX
+    
     DO JF=JFMIN,JFMAX
-      JF1=MIN(JF+NINT(LOG(1.27)/LOG(XFR)),JFMAX)
+      JF1=MIN(JF+NINT(LOG(GQFRESAT)/LOG(XFR)),JFMAX)
       SUME=SUM(F(:,JF1))*DTH
-      SATVAL(JF1) = SUME*FREQ(JF1)**5
+      SATVAL(JF) = SUME*FREQ(JF)**5
+      IF (SATVAL(JF).GT.GQTHRSAT.AND.JFMINS.EQ.JFMAX) JFMINS=JF
       ACCVAL = SUME*FREQ(JF)**4
       IF (ACCVAL.GT.ACCMAX) ACCMAX=ACCVAL
     END DO
-
-
+    JFMIN=JFMINS
+    
     !     ==================================================
     !     STARTS LOOP 1 OVER THE SELECTED CONFIGURATIONS
     !     ==================================================
@@ -1087,7 +1090,6 @@ CONTAINS
       !       STARTS LOOP 2 OVER THE SPECTRUM FREQUENCIES
       !       = = = = = = = = = = = = = = = = = = = = = = = = =
       DO JF=JFMIN,JFMAX
-        IF (SATVAL(JF).GT.GQTHRSAT) THEN
           !
           !.........Recovers the coefficient for the coupling factor
           !.........Computes the coupling coefficients for the case +Delta1 (SIG=1)
@@ -1279,7 +1281,6 @@ CONTAINS
           !         END OF LOOP 3 OVER THE SPECTRUM DIRECTIONS
           !         -------------------------------------------------
           !
-        ENDIF ! End of test on saturation level
       ENDDO
       !       = = = = = = = = = = = = = = = = = = = = = = = = =
       !       END OF LOOP 2 OVER THE SPECTRUM FREQUENCIES

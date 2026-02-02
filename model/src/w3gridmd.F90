@@ -880,7 +880,7 @@ MODULE W3GRIDMD
   REAL                    :: LAMBDA, KDCONV, KDMIN,               &
        SNLCS1, SNLCS2, SNLCS3
   INTEGER                 :: IQTYPE, GQMNF1, GQMNT1, GQMNQ_OM2
-  REAL                    :: TAILNL, GQMTHRSAT, GQMTHRCOU,        &
+  REAL                    :: TAILNL, GQMTHRSAT, GQMFRESAT, GQMTHRCOU,        &
                              GQAMP1, GQAMP2, GQAMP3, GQAMP4
 #endif
 #ifdef W3_NL2
@@ -1018,7 +1018,7 @@ MODULE W3GRIDMD
   NAMELIST /SNL1/ LAMBDA, NLPROP, KDCONV, KDMIN,                  &
        SNLCS1, SNLCS2, SNLCS3,                                    &
        IQTYPE, TAILNL, GQMNF1, GQMNT1, GQMNQ_OM2,                 &
-       GQMTHRSAT, GQMTHRCOU, GQAMP1, GQAMP2, GQAMP3, GQAMP4,      &
+       GQMTHRSAT, GQMFRESAT, GQMTHRCOU, GQAMP1, GQAMP2, GQAMP3, GQAMP4,      &
        GQMDIA, GQMDIA_WND_THR, GQMDIA_HS_THR, GQMDIAFIN, GQMDIAFDS
 #endif
 #ifdef W3_NL2
@@ -1886,6 +1886,7 @@ CONTAINS
     GQMNT1 = 8
     GQMNQ_OM2=8
     GQMTHRSAT=0.
+    GQMFRESAT=1.27
     GQMTHRCOU=0.015
     GQAMP1=1.
     GQAMP2=0.0022
@@ -1912,6 +1913,7 @@ CONTAINS
     GQNF1  = GQMNF1
     GQNT1  = GQMNT1
     GQNQ_OM2  = GQMNQ_OM2
+    GQFRESAT  = GQMFRESAT
     GQTHRSAT  = GQMTHRSAT
     GQTHRCOU  = GQMTHRCOU
     GQAMP(1)  = GQAMP1
@@ -3267,7 +3269,7 @@ CONTAINS
       WRITE (NDSO,2922) LAMBDA, NLPROP, KDCONV, KDMIN,       &
            SNLCS1, SNLCS2, SNLCS3,              &
            IQTYPE, TAILNL, GQMNF1,              &
-           GQMNT1, GQMNQ_OM2, GQMTHRSAT, GQMTHRCOU,&
+           GQMNT1, GQMNQ_OM2, GQMTHRSAT, GQMFRESAT, GQMTHRCOU,&
            GQAMP1, GQAMP2, GQAMP3, GQAMP4, GQMDIA, GQMDIA_WND_THR, GQMDIA_HS_THR, GQMDIAFIN, GQMDIAFDS
 #endif
 #ifdef W3_NL2
@@ -6360,7 +6362,7 @@ CONTAINS
          ', SNLCS3 = ',F7.3,','/                           &
          '        IQTYPE =',I2,', TAILNL =',F5.1,','/      &
          '        GQMNF1 =',I2,', GQMNT1 =',I2,',',        &
-         ' GQMNQ_OM2 =',I2,', GQMTHRSAT =',E11.4,', GQMTHRCOU =',F4.3,','/ &
+         ' GQMNQ_OM2 =',I2,', GQMTHRSAT =',E11.4,', GQMFRESAT =',F4.2,', GQMTHRCOU =',F4.3,','/ &
          '        GQAMP1 =',F5.3,', GQAMP2 =',F5.3,', GQAMP3 =',F5.3,', GQAMP4 =',F5.3,','/      &
          '        GQMDIA =',I2,', GQMDIA_WND_THR=',F5.1,', GQMDIA_HS_THR=',F5.1,                 &
          ', GQMDIAFIN=,',F4.2,', GQMDIAFDS=,',F4.2,' /')
