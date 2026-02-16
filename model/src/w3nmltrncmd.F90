@@ -35,6 +35,7 @@ MODULE W3NMLTRNCMD
   TYPE NML_FILE_T
     CHARACTER(30)               :: PREFIX
     INTEGER                     :: NETCDF
+    INTEGER                     :: NCVARTYPE
   END TYPE NML_FILE_T
 
   ! miscellaneous
@@ -355,6 +356,7 @@ CONTAINS
     ! set default values for file structure
     FILE%PREFIX    = 'ww3.'
     FILE%NETCDF    = 3
+    FILE%NCVARTYPE = 4
 
     ! read file namelist
     REWIND (NDSI)

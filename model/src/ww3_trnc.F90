@@ -101,7 +101,7 @@ PROGRAM W3TRNC
        NDSOUT, NDSTRC, NTRACE,              &
        NSPEC, IERR, MK, MTH, IT,            &
        ILOC, ISPEC, S3, IOUT,               &
-       IRET, NCTYPE,NCID, ITH
+       IRET, NCTYPE,NCID, ITH, NCVARTYPE
 
   INTEGER                 :: TIME(2), TOUT(2), NOUT, TDUM(2),     &
        DIMID(4), VARID(18), DIMLN(4),       &
@@ -175,6 +175,8 @@ PROGRAM W3TRNC
   ! process ww3_trnc namelist
   !
   INQUIRE(FILE=TRIM(FNMPRE)//"ww3_trnc.nml", EXIST=FLGNML)
+  NCVARTYPE=4
+
   IF (FLGNML) THEN
     ! Read namelist
     CALL W3NMLTRNC (NDSI, TRIM(FNMPRE)//'ww3_trnc.nml', NML_TRACK, NML_FILE, IERR)
@@ -187,6 +189,7 @@ PROGRAM W3TRNC
 
     ! 3.2 Output type
     NCTYPE = NML_FILE%NETCDF
+    NCVARTYPE = NML_FILE%NCVARTYPE
     FILEPREFIX = NML_FILE%PREFIX
     S3 = NML_TRACK%TIMESPLIT
 
@@ -508,7 +511,7 @@ CONTAINS
     !/
     INTEGER                 :: S1, S2, S4, S5, NDSDAT, IRET
     INTEGER                 :: STARTDATE(8), CURDATE(8), REFDATE(8)
-    INTEGER                  :: DEFLATE=1
+    INTEGER                  :: DEFLATE=1, DEFLATEE=5
 #ifdef W3_S
     INTEGER, SAVE           :: IENT   =   0
 #endif
@@ -671,7 +674,7 @@ CONTAINS
 
     CALL T2D(TIME,CURDATE,IERR)
     OUTJULDAY=TSUB(REFDATE,CURDATE)
-    WRITE(NDSO,'(3A,I6,A,I4,A,I2.2,A,I2.2,A,I2.2,A,I2.2,A,I2.2,2A)')       &
+    WRITE(NDSO,'(3A,I8,A,I4,A,I2.2,A,I2.2,A,I2.2,A,I2.2,A,I2.2,2A)')       &
          'Writing new record ', ENAME(2:) ,'number ',IT,                  &
          ' for ',CURDATE(1),':',CURDATE(2),':',CURDATE(3),'T',CURDATE(5), &
          ':',CURDATE(6),':',CURDATE(7),' in file ',TRIM(FNAMENC)
@@ -721,9 +724,13 @@ CONTAINS
 
 
     ! 1.7.2.a Write spectrum
-
-    IRET=NF90_PUT_VAR(NCID,VARID(9),                               &
+    IF (NCVARTYPE.EQ.2) THEN 
+       IRET=NF90_PUT_VAR(NCID,VARID(9),                               &
+         TRANSPOSE(ALOG10(SPEC+1E-12)),start=(/1,1,IT/), count=(/MTH,MK,1/))
+    ELSE 
+       IRET=NF90_PUT_VAR(NCID,VARID(9),                               &
          TRANSPOSE(SPEC),start=(/1,1,IT/), count=(/MTH,MK,1/))
+    ENDIF
     CALL CHECK_ERR(IRET)
 
     ! 1.7.2.b Write the basic stuff
@@ -792,6 +799,7 @@ CONTAINS
     INTEGER, INTENT(OUT)              :: DIMID(:), VARID(:), NCID
     INTEGER                           :: IRET
     INTEGER                           :: DEFLATE=1
+    INTEGER :: chunks(3)
 
     !
     ! Creation in netCDF3 or netCDF4
@@ -956,20 +964,42 @@ CONTAINS
 
 
     ! Efth
-    IRET=NF90_DEF_VAR(NCID,'efth',NF90_FLOAT,(/DIMID(3),DIMID(2),DIMID(1)/),VARID(9))
-    IF (NCTYPE.EQ.4) IRET=NF90_DEF_VAR_DEFLATE(NCID, VARID(9), 1, 1, DEFLATE)
+    chunks = (/1, MK, MTH /)   ! adjust time chunk
+    WRITE(6,*) 'TEST:',NCVARTYPE,NCTYPE
+    IF (NCVARTYPE.EQ.2) THEN
+       IRET=NF90_DEF_VAR(NCID,'efth',NF90_SHORT,(/DIMID(3),DIMID(2),DIMID(1)/),VARID(9))
+    ELSE
+       IRET=NF90_DEF_VAR(NCID,'efth',NF90_FLOAT,(/DIMID(3),DIMID(2),DIMID(1)/),VARID(9))
+    END IF
+    
+    IF (NCTYPE.EQ.4) THEN
+       !IRET = NF90_DEF_VAR_CHUNKING(NCID, VARID(9), NF90_CHUNKED, chunks)
+       !if (IRET /= NF90_NOERR) print *, "Chunking error:", NF90_STRERROR(IRET)
+       IRET=NF90_DEF_VAR_DEFLATE(NCID, VARID(9), 1, 1, 5) !DEFLATE)
+    ENDIF
+
     IRET=NF90_PUT_ATT(NCID,VARID(9),'long_name',                     &
          'sea surface wave directional variance spectral density')
     IRET=NF90_PUT_ATT(NCID,VARID(9),'standard_name',                 &
          'sea_surface_wave_directional_variance_spectral_density')
     IRET=NF90_PUT_ATT(NCID,VARID(9),'globwave_name',                 &
          'directional_variance_spectral_density')
-    IRET=NF90_PUT_ATT(NCID,VARID(9),'units','m2 s rad-1')
-    IRET=NF90_PUT_ATT(NCID,VARID(9),'scale_factor',1.)
-    IRET=NF90_PUT_ATT(NCID,VARID(9),'add_offset',0.)
-    IRET=NF90_PUT_ATT(NCID,VARID(9),'valid_min',0.)
-    IRET=NF90_PUT_ATT(NCID,VARID(9),'valid_max',10.)
-    IRET=NF90_PUT_ATT(NCID,VARID(9),'_FillValue',NF90_FILL_FLOAT)
+    IF (NCVARTYPE.LE.3) THEN
+       IRET=NF90_PUT_ATT(NCID,VARID(9),'units','log10(m2 s rad-1+1E-12)')
+       IRET=NF90_PUT_ATT(NCID,VARID(9),'scale_factor',0.0004)
+       IRET=NF90_PUT_ATT(NCID,VARID(9),'add_offset',0.)
+       IRET=NF90_PUT_ATT(NCID,VARID(9),'valid_min',-12)
+       IRET=NF90_PUT_ATT(NCID,VARID(9),'valid_max',12)
+       IRET=NF90_PUT_ATT(NCID,VARID(9),'_FillValue',NF90_FILL_SHORT)
+    ELSE
+       IRET=NF90_PUT_ATT(NCID,VARID(9),'units','m2 s rad-1')
+       IRET=NF90_PUT_ATT(NCID,VARID(9),'scale_factor',1.)
+       IRET=NF90_PUT_ATT(NCID,VARID(9),'add_offset',0.)
+       IRET=NF90_PUT_ATT(NCID,VARID(9),'valid_min',0.)
+       IRET=NF90_PUT_ATT(NCID,VARID(9),'valid_max',10.)
+       IRET=NF90_PUT_ATT(NCID,VARID(9),'_FillValue',NF90_FILL_FLOAT)
+    END IF
+         
     IRET=NF90_PUT_ATT(NCID,VARID(9),'content','TYZ')
     IRET=NF90_PUT_ATT(NCID,VARID(9),'associates','time frequency direction')
 
