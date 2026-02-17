@@ -36,6 +36,9 @@ MODULE W3NMLTRNCMD
     CHARACTER(30)               :: PREFIX
     INTEGER                     :: NETCDF
     INTEGER                     :: NCVARTYPE
+    INTEGER                     :: NCDEFLATE
+    REAL                        :: EFTHFSC
+
   END TYPE NML_FILE_T
 
   ! miscellaneous
@@ -355,8 +358,10 @@ CONTAINS
 
     ! set default values for file structure
     FILE%PREFIX    = 'ww3.'
-    FILE%NETCDF    = 3
     FILE%NCVARTYPE = 4
+    FILE%NETCDF    = 3
+    FILE%NCDEFLATE = 5
+    FILE%EFTHFSC   = 0.0004
 
     ! read file namelist
     REWIND (NDSI)
@@ -548,6 +553,9 @@ CONTAINS
     WRITE (NDSN,'(A)')
     WRITE (NDSN,10) TRIM(MSG),'PREFIX    = ', TRIM(NML_FILE%PREFIX)
     WRITE (NDSN,11) TRIM(MSG),'NETCDF    = ', NML_FILE%NETCDF
+    WRITE (NDSN,11) TRIM(MSG),'NCFILETYPE= ', NML_FILE%NCVARTYPE
+    WRITE (NDSN,11) TRIM(MSG),'NCDEFLATE = ', NML_FILE%NCDEFLATE
+    WRITE (NDSN,'(A,2X,A,F6.4)') TRIM(MSG),'EFTHSC = ', NML_FILE%EFTHFSC
 
 
 10  FORMAT (A,2X,A,A)

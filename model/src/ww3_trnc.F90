@@ -101,7 +101,7 @@ PROGRAM W3TRNC
        NDSOUT, NDSTRC, NTRACE,              &
        NSPEC, IERR, MK, MTH, IT,            &
        ILOC, ISPEC, S3, IOUT,               &
-       IRET, NCTYPE,NCID, ITH, NCVARTYPE
+       IRET, NCTYPE,NCID, ITH, NCVARTYPE, NCDEFLATE
 
   INTEGER                 :: TIME(2), TOUT(2), NOUT, TDUM(2),     &
        DIMID(4), VARID(18), DIMLN(4),       &
@@ -112,7 +112,7 @@ PROGRAM W3TRNC
   !
   REAL                    :: TH1, DTH, X, Y, DW, CX, CY, CAO, CDO,&
        WX, WY, WAO, WDO, UST, AS, DTEST,    &
-       DTREQ, DTHD, RTH0, M2KM
+       DTREQ, DTHD, RTH0, M2KM, EFTHFSC
   !
   REAL, ALLOCATABLE       :: FREQ(:), FREQ1(:), FREQ2(:), DSIP(:),&
        SPEC(:,:), E(:,:), THD(:), DIR(:)
@@ -176,6 +176,8 @@ PROGRAM W3TRNC
   !
   INQUIRE(FILE=TRIM(FNMPRE)//"ww3_trnc.nml", EXIST=FLGNML)
   NCVARTYPE=4
+  NCDEFLATE=5
+  EFTHFSC=1.
 
   IF (FLGNML) THEN
     ! Read namelist
@@ -190,6 +192,8 @@ PROGRAM W3TRNC
     ! 3.2 Output type
     NCTYPE = NML_FILE%NETCDF
     NCVARTYPE = NML_FILE%NCVARTYPE
+    NCDEFLATE = NML_FILE%NCDEFLATE
+    EFTHFSC   = NML_FILE%EFTHFSC 
     FILEPREFIX = NML_FILE%PREFIX
     S3 = NML_TRACK%TIMESPLIT
 
@@ -359,7 +363,7 @@ PROGRAM W3TRNC
 
 
       ! 5.1.2  Processes the variable value for the time step IOUT
-      CALL W3EXNC ( FILEPREFIX, NCTYPE, NCID, S3, STRSTOPDATE, MK, MTH )
+      CALL W3EXNC ( FILEPREFIX, NCTYPE, NCVARTYPE, NCDEFLATE, NCID, S3, STRSTOPDATE, MK, MTH, EFTHFSC )
 
 
       ! 5.1.3 Defines the stop date
@@ -438,7 +442,7 @@ CONTAINS
   !>
   !> @author M. Accensi  @date 08-Apr-2016
   !>
-  SUBROUTINE W3EXNC ( FILEPREFIX, NCTYPE, NCID, S3, STRSTOPDATE, MK, MTH )
+  SUBROUTINE W3EXNC ( FILEPREFIX, NCTYPE, NCVARTYPE, NCDEFLATE, NCID, S3, STRSTOPDATE, MK, MTH, EFTHFSC )
     !/
     !/                  +-----------------------------------+
     !/                  |           M. Accensi              |
@@ -502,16 +506,17 @@ CONTAINS
     !/ ------------------------------------------------------------------- /
     !/ Parameter list
     !/
-    INTEGER, INTENT(IN)       :: NCTYPE, MK, MTH
+    INTEGER, INTENT(IN)       :: NCTYPE, NCVARTYPE, MK, MTH, NCDEFLATE
     CHARACTER(30), INTENT(IN) :: FILEPREFIX, STRSTOPDATE
     INTEGER, INTENT(INOUT)    :: NCID, S3
+    REAL   , INTENT(IN)       :: EFTHFSC
     !/
     !/ ------------------------------------------------------------------- /
     !/ Local parameters
     !/
     INTEGER                 :: S1, S2, S4, S5, NDSDAT, IRET
     INTEGER                 :: STARTDATE(8), CURDATE(8), REFDATE(8)
-    INTEGER                  :: DEFLATE=1, DEFLATEE=5
+    INTEGER                  :: DEFLATE=1
 #ifdef W3_S
     INTEGER, SAVE           :: IENT   =   0
 #endif
@@ -620,7 +625,7 @@ CONTAINS
 
       ! 1.4.1 Creates the NetCDF file
 
-      CALL W3CRNC(NCTYPE,FNAMENC,NCID,DIMID,DIMLN,VARID)
+      CALL W3CRNC(NCTYPE,NCVARTYPE,NCDEFLATE, FNAMENC,NCID,DIMID,DIMLN,VARID,EFTHFSC)
 
       ! put start date in global attribute
       CALL T2D(TIME,STARTDATE,IERR)
@@ -668,7 +673,6 @@ CONTAINS
       WRITE (NDSO,973) FNAMENC
 
     END IF  ! IERR.EQ.0
-
 
     ! 1.5 Defines the current time step and index
 
@@ -726,7 +730,7 @@ CONTAINS
     ! 1.7.2.a Write spectrum
     IF (NCVARTYPE.EQ.2) THEN 
        IRET=NF90_PUT_VAR(NCID,VARID(9),                               &
-         TRANSPOSE(ALOG10(SPEC+1E-12)),start=(/1,1,IT/), count=(/MTH,MK,1/))
+         TRANSPOSE(ALOG10(SPEC+1E-12)/EFTHFSC),start=(/1,1,IT/), count=(/MTH,MK,1/))
     ELSE 
        IRET=NF90_PUT_VAR(NCID,VARID(9),                               &
          TRANSPOSE(SPEC),start=(/1,1,IT/), count=(/MTH,MK,1/))
@@ -787,16 +791,17 @@ CONTAINS
   !>
   !> @author NA  @date NA
   !>
-  SUBROUTINE W3CRNC (NCTYPE,NCFILE,NCID,DIMID,DIMLN,VARID)
+  SUBROUTINE W3CRNC (NCTYPE,NCVARTYPE,NCDEFLATE, NCFILE,NCID,DIMID,DIMLN,VARID,EFTHFSC)
 
     USE NETCDF
 
     IMPLICIT NONE
 
-    INTEGER, INTENT(IN)               :: NCTYPE
+    INTEGER, INTENT(IN)               :: NCTYPE, NCVARTYPE, NCDEFLATE
     CHARACTER*(*), INTENT(IN)         :: NCFILE
     INTEGER, INTENT(IN)               :: DIMLN(:)
     INTEGER, INTENT(OUT)              :: DIMID(:), VARID(:), NCID
+    REAL   , INTENT(IN)               :: EFTHFSC
     INTEGER                           :: IRET
     INTEGER                           :: DEFLATE=1
     INTEGER :: chunks(3)
@@ -975,7 +980,7 @@ CONTAINS
     IF (NCTYPE.EQ.4) THEN
        !IRET = NF90_DEF_VAR_CHUNKING(NCID, VARID(9), NF90_CHUNKED, chunks)
        !if (IRET /= NF90_NOERR) print *, "Chunking error:", NF90_STRERROR(IRET)
-       IRET=NF90_DEF_VAR_DEFLATE(NCID, VARID(9), 1, 1, 5) !DEFLATE)
+       IRET=NF90_DEF_VAR_DEFLATE(NCID, VARID(9), 1, 1, NCDEFLATE) !DEFLATE)
     ENDIF
 
     IRET=NF90_PUT_ATT(NCID,VARID(9),'long_name',                     &
@@ -986,10 +991,10 @@ CONTAINS
          'directional_variance_spectral_density')
     IF (NCVARTYPE.LE.3) THEN
        IRET=NF90_PUT_ATT(NCID,VARID(9),'units','log10(m2 s rad-1+1E-12)')
-       IRET=NF90_PUT_ATT(NCID,VARID(9),'scale_factor',0.0004)
+       IRET=NF90_PUT_ATT(NCID,VARID(9),'scale_factor',EFTHFSC)
        IRET=NF90_PUT_ATT(NCID,VARID(9),'add_offset',0.)
-       IRET=NF90_PUT_ATT(NCID,VARID(9),'valid_min',-12)
-       IRET=NF90_PUT_ATT(NCID,VARID(9),'valid_max',12)
+       IRET=NF90_PUT_ATT(NCID,VARID(9),'valid_min',-12/EFTHFSC)
+       IRET=NF90_PUT_ATT(NCID,VARID(9),'valid_max',12/EFTHFSC)
        IRET=NF90_PUT_ATT(NCID,VARID(9),'_FillValue',NF90_FILL_SHORT)
     ELSE
        IRET=NF90_PUT_ATT(NCID,VARID(9),'units','m2 s rad-1')

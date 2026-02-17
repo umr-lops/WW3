@@ -231,7 +231,7 @@ PROGRAM W3OUNF
        IFI, IFJ, NCTYPE, IX1, IXN, IY1, IYN, &
        IOUT, S3, IRET,                       &
        NBIPART, CNTIPART, NCVARTYPEI, IPART, &
-       RTDNX, RTDNY
+       RTDNX, RTDNY, NCDEFLATE
   INTEGER                 :: TOUT(2), TDUM(2), TREF(2), TEPOCH(2), &
        STOPDATE(8), REFDATE(8)
   !
@@ -241,7 +241,7 @@ PROGRAM W3OUNF
   INTEGER, SAVE           :: IENT = 0
 #endif
   !
-  REAL                    :: DTREQ, DTEST
+  REAL                    :: DTREQ, DTEST, EFFSC, P2LFSC
   !
   CHARACTER*30            :: STRSTOPDATE, FILEPREFIX, STRINGIPART
   CHARACTER*1024          :: FLDOUT
@@ -350,6 +350,9 @@ PROGRAM W3OUNF
 
     ! 4.3 Output type
     NCTYPE = NML_FILE%NETCDF
+    NCDEFLATE = NML_FILE%NCDEFLATE
+    EFFSC = NML_FILE%EFFSC
+    P2LFSC = NML_FILE%P2LFSC
     NCVARTYPE = NML_FIELD%TYPE
     STRINGIPART = NML_FIELD%PARTITION
     TOGETHER = NML_FIELD%SAMEFILE
@@ -418,6 +421,9 @@ PROGRAM W3OUNF
     ! 4.3 Output type
     CALL NEXTLN ( COMSTR , NDSI , NDSE )
     READ (NDSI,*,IOSTAT=IERR) NCTYPE, NCVARTYPE
+    NCDEFLATE=1
+    P2LFSC=0.0004
+    EFFSC=0.0004
     IF (IERR.NE.0) CALL EXTIOF(NDSE,IERR,'W3OUNF','INPUT',11)
     CALL NEXTLN ( COMSTR , NDSI , NDSE )
     READ (NDSI,'(A)',IOSTAT=IERR) STRINGIPART
@@ -651,8 +657,8 @@ PROGRAM W3OUNF
 
     ! 5.1.2  Processes the variable value for the time step IOUT
     CALL W3EXNC ( NX, NY, IX1, IXN, IY1, IYN, NSEA, FILEPREFIX,   &
-         E3DF, P2MSF, US3DF, USSPF, NCTYPE, TOGETHER, NCVARTYPEI,&
-         FLG2D, NCIDS, S3, STRSTOPDATE )
+         E3DF, P2MSF, US3DF, USSPF, NCTYPE, NCDEFLATE, TOGETHER, NCVARTYPEI,&
+         FLG2D, NCIDS, S3, STRSTOPDATE, EFFSC, P2LFSC )
 
     ! 5.1.3 Defines the stop date
     CALL T2D(TOUT,STOPDATE,IERR)
@@ -847,8 +853,8 @@ CONTAINS
   !> @date 22-Mar-2021
   !>
   SUBROUTINE W3EXNC ( NX, NY, IX1, IXN, IY1, IYN, NSEA,             &
-       FILEPREFIX, E3DF, P2MSF, US3DF, USSPF,NCTYPE, &
-       TOGETHER, NCVARTYPEI, FLG2D, NCIDS, S3, STRSTOPDATE )
+       FILEPREFIX, E3DF, P2MSF, US3DF, USSPF,NCTYPE, NCDEFLATE,  &
+       TOGETHER, NCVARTYPEI, FLG2D, NCIDS, S3, STRSTOPDATE, EFFSC, P2LFSC )
     !/
     !/                  +-----------------------------------+
     !/                  |           F. Ardhuin              |
@@ -872,6 +878,7 @@ CONTAINS
     !/    02-Feb-2021 : Make default global meta optional   ( version 7.12 )
     !/    22-Mar-2021 : New coupling fields output          ( version 7.13 )
     !/    04-Jul-2025 : Remove labelled statements          ( version X.XX )
+    !/    17-Feb-2026 : Adds management of DEFLATE          ( version X.XX )
     !/
     !  1. Purpose :
     !
@@ -956,12 +963,13 @@ CONTAINS
     !/
     INTEGER, INTENT(IN)     :: NX, NY, IX1, IXN, IY1, IYN, NSEA,     &
          E3DF(3,5), P2MSF(3), US3DF(3),        &
-         USSPF(2), NCTYPE, NCVARTYPEI
+         USSPF(2), NCTYPE, NCVARTYPEI, NCDEFLATE
     CHARACTER(30)           :: FILEPREFIX
     LOGICAL, INTENT(IN)     :: TOGETHER
     LOGICAL, INTENT(IN)     :: FLG2D(NOGRP,NGRPP)
     INTEGER, INTENT(INOUT)  :: NCIDS(NOGRP,NGRPP,NOSWLL + 1), S3
     CHARACTER*30,INTENT(IN) :: STRSTOPDATE
+    REAL        ,INTENT(IN) :: EFFSC, P2LFSC
     !/
     !/ ------------------------------------------------------------------- /
     !/ Local parameters
@@ -1025,6 +1033,8 @@ CONTAINS
 #endif
 
     TYPE(META_T)            :: META(3)
+    INTEGER                 :: chunks(4)
+
     !TYPE(META_T)            :: META
     !/
     !/ ------------------------------------------------------------------- /
@@ -2008,7 +2018,13 @@ CONTAINS
             ! CB Get netCDF metadata for IFI, IFJ combination (all components).
             DO I=1,NFIELD
               META(I) = GETMETA(IFI, IFJ, ICOMP=I, IPART=IPART)
-            ENDDO
+            END DO
+            ! Overrides scale factors when defined in namelist ... 
+            IF (NCVARTYPE.EQ.2) THEN 
+               IF (IFI .EQ. 6 .AND. IFJ .EQ.  9) META(1)%FSC =  P2LFSC
+               IF (IFI .EQ. 3) META(1)%FSC =  EFFSC
+            ENDIF
+
 
             ! 2.2 Make map
 
@@ -2168,7 +2184,7 @@ CONTAINS
 
               ! 2.5.1 Creates the NetCDF file
               CALL W3CRNC(FNAMENC,NCID,DIMID,DIMLN,VARID, &
-                   EXTRADIM,NCTYPE,MAPSTAOUT)
+                   EXTRADIM,NCTYPE, MAPSTAOUT)
 
               ! Saves the NCID to keep the file opened to write all the variables
               ! and open/close at each time step
@@ -2562,6 +2578,7 @@ CONTAINS
 
               IRET = NF90_REDEF(NCID)
               CALL CHECK_ERR(IRET)
+              
               DO I=1,NFIELD
                 IVAR=IVAR1+I
                 IF (COORDTYPE.EQ.1) THEN
@@ -2577,8 +2594,6 @@ CONTAINS
                     ENDIF
 #endif
                     CALL CHECK_ERR(IRET)
-                    IF (NCTYPE.EQ.4) IRET = NF90_DEF_VAR_DEFLATE(NCID, VARID(IVAR), 1, 1, DEFLATE)
-                    IF (NCTYPE.EQ.4) CALL CHECK_ERR(IRET)
                   ELSE
 #ifdef W3_SMC
                     IF( SMCGRD .AND. SMCOTYPE .EQ. 1 ) THEN
@@ -2591,10 +2606,21 @@ CONTAINS
                     ENDIF
 #endif
                     CALL CHECK_ERR(IRET)
-                    IF (NCTYPE.EQ.4) IRET = NF90_DEF_VAR_DEFLATE(NCID, VARID(IVAR), 1, 1, DEFLATE)
-                    IF (NCTYPE.EQ.4) CALL CHECK_ERR(IRET)
                   END IF
-                ELSE
+                  ! adjusts chunk sizes to PUT_VAR statements ... 
+                  IF (NCTYPE.EQ.4.AND.( .NOT.SMCGRD)) THEN 
+                     IF (GTYPE.NE.UNGTYPE) THEN
+                        chunks = (/ IXN-IX1+1, 1, 1 , 1 /)   ! adjust chunk
+                     ELSE 
+                        chunks = (/ IXN-IX1+1, IYN-IY1+1, 1 , 1 /)   ! adjust chunk
+                     ENDIF  
+                     IRET = NF90_DEF_VAR_CHUNKING(NCID, VARID(IVAR), NF90_CHUNKED, chunks(1:3+EXTRADIM))
+                     CALL CHECK_ERR(IRET)
+                     IRET = NF90_DEF_VAR_DEFLATE(NCID, VARID(IVAR), 1, 1, NCDEFLATE)
+                     CALL CHECK_ERR(IRET)
+                  ENDIF
+
+                ELSE ! (NCVARTYPE.NE.2) 
                   DIMFIELD(1)=DIMID(2)
                   DIMFIELD(2)=DIMID(4)
                   DIMFIELD(3)=DIMID(5)
@@ -2743,12 +2769,12 @@ CONTAINS
                     IF (NCVARTYPE.EQ.2) THEN
                       IRET = NF90_DEF_VAR(NCID,META(I)%varnm, NF90_SHORT, DIMFIELD(1:2+EXTRADIM), VARID(IVAR))
                       CALL CHECK_ERR(IRET)
-                      IF (NCTYPE.EQ.4) IRET = NF90_DEF_VAR_DEFLATE(NCID, VARID(IVAR), 1, 1, DEFLATE)
+                      IF (NCTYPE.EQ.4) IRET = NF90_DEF_VAR_DEFLATE(NCID, VARID(IVAR), 1, 1, NCDEFLATE)
                       IF (NCTYPE.EQ.4) CALL CHECK_ERR(IRET)
                     ELSE
                       IRET = NF90_DEF_VAR(NCID,META(I)%varnm, NF90_FLOAT, DIMFIELD(1:2+EXTRADIM), VARID(IVAR))
                       CALL CHECK_ERR(IRET)
-                      IF (NCTYPE.EQ.4) IRET = NF90_DEF_VAR_DEFLATE(NCID, VARID(IVAR), 1, 1, DEFLATE)
+                      IF (NCTYPE.EQ.4) IRET = NF90_DEF_VAR_DEFLATE(NCID, VARID(IVAR), 1, 1, NCDEFLATE)
                       CALL CHECK_ERR(IRET)
                     END IF
                   END IF
@@ -3288,8 +3314,6 @@ CONTAINS
     USE W3TIMEMD
 
     IMPLICIT NONE
-
-
 
     INTEGER, INTENT(IN)               :: EXTRADIM
     INTEGER, INTENT(IN)               :: NCTYPE

@@ -46,7 +46,8 @@ MODULE W3NMLOUNFMD
   ! file structure
   TYPE NML_FILE_T
     CHARACTER(30)               :: PREFIX
-    INTEGER                     :: NETCDF
+    INTEGER                     :: NETCDF,NCDEFLATE
+    REAL                        :: EFFSC,P2LFSC
     INTEGER                     :: IX0
     INTEGER                     :: IXN
     INTEGER                     :: IY0
@@ -403,6 +404,9 @@ CONTAINS
     ! set default values for file structure
     FILE%PREFIX    = 'ww3.'
     FILE%NETCDF    = 3
+    FILE%NCDEFLATE = 5
+    FILE%EFFSC     = 0.0004
+    FILE%P2LFSC    = 0.0004
     FILE%IX0       = 1
     FILE%IXN       = 1000000000
     FILE%IY0       = 1
@@ -714,6 +718,9 @@ CONTAINS
     WRITE (NDSN,'(A)')
     WRITE (NDSN,10) TRIM(MSG),'PREFIX    = ', TRIM(NML_FILE%PREFIX)
     WRITE (NDSN,11) TRIM(MSG),'NETCDF    = ', NML_FILE%NETCDF
+    WRITE (NDSN,11) TRIM(MSG),'NCDEFLATE = ', NML_FILE%NCDEFLATE
+    WRITE (NDSN,12) TRIM(MSG),'EFFSC     = ', NML_FILE%EFFSC
+    WRITE (NDSN,12) TRIM(MSG),'P2LFSC    = ', NML_FILE%P2LFSC
     WRITE (NDSN,11) TRIM(MSG),'IX0       = ', NML_FILE%IX0
     WRITE (NDSN,11) TRIM(MSG),'IXN       = ', NML_FILE%IXN
     WRITE (NDSN,11) TRIM(MSG),'IY0       = ', NML_FILE%IY0
@@ -721,6 +728,7 @@ CONTAINS
 
 10  FORMAT (A,2X,A,A)
 11  FORMAT (A,2X,A,I12)
+12  FORMAT (A,2X,A,F8.6)
 
   END SUBROUTINE REPORT_FILE_NML
 
