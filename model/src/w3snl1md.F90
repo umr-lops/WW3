@@ -1040,9 +1040,11 @@ CONTAINS
     JFMINS=JFMAX
     
     DO JF=JFMIN,JFMAX
+      ! JF1 will correspond to a higher frequency than JF if GQFRESAT > 1, extending the Snl calc. range to lower freq. 
       JF1=MIN(JF+NINT(LOG(GQFRESAT)/LOG(XFR)),JFMAX)
       SUME=SUM(F(:,JF1))*DTH
-      SATVAL(JF) = SUME*FREQ(JF)**5
+      !SATVAL(JF) = SUME*FREQ(JF1)**5 
+      SATVAL(JF) = SUME*FREQ(JF)**5 !this gives a lower effective threshold
       IF (SATVAL(JF).GT.GQTHRSAT.AND.JFMINS.EQ.JFMAX) JFMINS=JF
       ACCVAL = SUME*FREQ(JF)**4
       IF (ACCVAL.GT.ACCMAX) ACCMAX=ACCVAL
@@ -1097,7 +1099,7 @@ CONTAINS
           T_2P3M=T2P3M*SCAL_T
           T_2M3P=T2M3P*SCAL_T
           !
-          !.........Frequency indexes and coefficients
+          !.........Frequency indices and coefficients
           JFM0=F_POIN(JF+LBUF)
           CF0 =F_COEF(JF+LBUF)
           CP0 =F_PROJ(JF+LBUF)
