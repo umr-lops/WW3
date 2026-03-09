@@ -183,19 +183,22 @@ CONTAINS
     !/ ------------------------------------------------------------------- /
     !/
     USE CONSTANTS
-    USE W3GDATMD, ONLY: NK, NTH, NSPEC, SDBC1, SDBC2, FDONLY, FSSOURCE, DDEN
-    USE W3ODATMD, ONLY: NDST
+    USE W3GDATMD, ONLY: NK, NTH, NSPEC, SDBC1, SDBC2, FDONLY, DDEN
     USE W3GDATMD, ONLY: SIG
-    USE W3ODATMD, only : IAPROC
-    USE W3PARALL, only : THR 
+    USE W3PARALL, only : THR
 #ifdef W3_S
     USE W3SERVMD, ONLY: STRACE
 #endif
+#ifdef W3_T
+    USE W3ODATMD, ONLY: NDST
+#endif
 #ifdef W3_T0
     USE W3ARRYMD, ONLY: PRT2DS
+    USE W3ODATMD, ONLY: NDST
 #endif
 #ifdef W3_T1
     USE W3ARRYMD, ONLY: OUTMAT
+    USE W3ODATMD, ONLY: NDST
 #endif
     !/
     IMPLICIT NONE
@@ -219,8 +222,8 @@ CONTAINS
     INTEGER, SAVE           :: IENT = 0
 #endif
     REAL*8                    :: HM, BB, ARG, Q0, QB, B, CBJ, HRMS, EB(NK)
-    REAL*8                    :: AUX, CBJ2, RATIO, S0, S1, BR1, BR2, FAK
-    REAL                      :: ETOT, FMEAN2
+    REAL*8                    :: FAK
+    REAL*8                    :: ETOT, FMEAN2
 #ifdef W3_T0
     REAL                    :: DOUT(NK,NTH)
 #endif
@@ -323,7 +326,7 @@ CONTAINS
       ELSE
         CBJ = 0.d0
       ENDIF
-      D = - CBJ
+      D = real(- CBJ, 4)
       S = D * A
     ELSE IF (IWB == 2) THEN
       IF (ETOT .GT. THR) THEN
@@ -333,7 +336,7 @@ CONTAINS
       ELSE
         CBJ  = 0.
       ENDIF
-      D = - CBJ
+      D = real(- CBJ, 4)
       S = D * A
     ENDIF
 

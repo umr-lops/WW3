@@ -243,16 +243,15 @@ CONTAINS
     !/ ------------------------------------------------------------------- /
     !/ Local parameters
     !/
-    INTEGER                 :: ITH, IMI(NSPEC), IMD(NSPEC),         &
-         IMO(NSPEC), IND(NSPEC), NP_MAX,      &
-         IP, IT(1), INDEX(DIMXP), NWS,        &
+    INTEGER                 :: ITH, IMI(NSPEC),         &
+         IMO(NSPEC), IND(NSPEC), NP_MAX,                &
+         IP, IT(1), INDEX(DIMXP), NWS,                  &
          IPW, IPT, ISP
     INTEGER                 :: PMAP(DIMXP)
 #ifdef W3_S
     INTEGER, SAVE           :: IENT = 0
 #endif
-    REAL                    :: ZP(NSPEC), ZMIN, ZMAX, Z(NSPEC),     &
-         FACT, WSMAX, HSMAX
+    REAL                    :: ZP(NSPEC), ZMIN, ZMAX, Z(NSPEC), FACT
     REAL                    :: TP(DIMP,DIMXP)
     INTEGER                 :: IK, WIND_PART    ! ChrisB; added for new
     REAL                    :: C, UPAR, SIGCUT  ! UKMO partioning methods
@@ -1190,6 +1189,7 @@ CONTAINS
     !/    02-Dec-2010 : Adding a mapping PMAP between      ( version 3.14 )
     !/                  original and combined partitions
     !/                  ( M. Szyszka )
+    !/    04-Jul-2025 : Remove labelled statements         ( version X.XX )
     !/
     !  1. Purpose :
     !
@@ -1232,7 +1232,7 @@ CONTAINS
     !
     USE W3GDATMD, ONLY: NK, NTH, NSPEC, DTH, SIG, DSII, DSIP,       &
          ECOS, ESIN, XFR, FACHFE, TH, FTE
-    USE W3ODATMD, ONLY: IAPROC, NAPERR, NDSE, NDST
+    USE W3ODATMD, ONLY: IAPROC, NAPERR, NDSE
     !
     IMPLICIT NONE
     !/
@@ -1412,7 +1412,10 @@ CONTAINS
         CYCLE
       ENDIF
       !
-      IF ( NPO .GE. DIMXP ) GOTO 2000
+      IF ( NPO .GE. DIMXP ) THEN
+        IF ( IAPROC .EQ. NAPERR ) WRITE (NDSE,1000) NPO+1
+        RETURN
+      END IF
       NPO = NPO + 1
       IF (IP.GT.0)THEN
         IF(NPO.LT.1)CYCLE
@@ -1523,12 +1526,6 @@ CONTAINS
       !
     END DO
     !
-    RETURN
-    !
-    ! Escape locations read errors --------------------------------------- *
-    !
-2000 CONTINUE
-    IF ( IAPROC .EQ. NAPERR ) WRITE (NDSE,1000) NPO+1
     RETURN
     !
     ! Formats

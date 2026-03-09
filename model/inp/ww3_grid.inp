@@ -358,6 +358,8 @@ $                           JGS_LIMITER  : TRUE: Use total (quasi-steady: limits
 $                                          FALSE: default 
 $                           JGS_LIMITER_FUNC  : 1 - old limiter (default)
 $                                               2 - alternatnive limiter
+$                           JGS_TRUNK_DIGITS  : [Only with switch TRNK] Number of digits of precision to truncate solution to at the end of iterative solver. 
+$                                               Can be used to force bit-for-bit reproducibility.
 $                           SETUP_APPLY_WLV  : Compute wave setup (TRUE/FALSE, default TRUE) 
 $                           SOLVERTHR_SETUP  : Solver threshold for setup computations (default 1E-6)
 $                           CRIT_DEP_SETUP  : Critical depth for setup computations (default 0.1) 
@@ -501,6 +503,10 @@ $                           P2SF   : ......
 $                           CALTYPE: Calendar type. The only accepted
 $                                    values are 'standard' (default),
 $                                    '365_day', or '360_day'.
+$                           IC_NUMERICS: Logical variable (T/F). Set to T to
+$                                      allow the user to place the 'sea ice'
+$                                      source terms with other source terms
+$                                      Default is F (PR_1294)
 $
 $ Diagnostic Sea-state Dependent Stress- - - - - - - - - - - - - - - - -
 $   Reichl et al. 2014  : Namelist FLD1

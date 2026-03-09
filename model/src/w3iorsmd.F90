@@ -48,6 +48,7 @@ MODULE W3IORSMD
   !      W3SETO, W3SETG, W3SETW, W3DIMW
   !                Subr. W3xDATMD Manage data structures.
   !      STRACE    Subr. W3SERVMD Subroutine tracing.            (!/S)
+  !      EXTIOF    Subr. W3SERVMD Abort I/O file with exit code.
   !      EXTCDE    Subr. W3SERVMD Abort program with exit code.
   !      MPI_STARTALL, MPI_WAITALL                              (!/MPI)
   !                Subr.          MPI persistent communication routines
@@ -151,6 +152,7 @@ CONTAINS
     !/    25-Sep-2020 : Extra fields for coupled restart    ( version 7.10 )
     !/    22-Mar-2021 : Add new coupling fields in restart  ( version 7.13 )
     !/    18-May-2021 : Read by default all extra restart   ( version 7.13 )
+    !/    04-Jul-2025 : Remove labelled statements          ( version X.XX )
     !/
     !/    Copyright 2009-2013 National Weather Service (NWS),
     !/       National Oceanic and Atmospheric Administration.  All rights
@@ -290,8 +292,9 @@ CONTAINS
     ! 10. Source code :
     !
     !/ ------------------------------------------------------------------- /
-    USE W3GDATMD, ONLY: W3SETG, W3SETREF, RSTYPE
+    USE W3GDATMD, ONLY: W3SETG, W3SETREF, RSTYPE, FETCH
     USE W3ODATMD, ONLY: W3SETO
+    USE W3WDATMD, only: W3SETW, W3DIMW
     USE W3ADATMD, ONLY: W3SETA, W3XETA, NSEALM
     USE W3ADATMD, ONLY: CX, CY, HS, WLM, T0M1, T01, FP0, THM, CHARN,&
          TAUWIX, TAUWIY, TWS, TAUOX, TAUOY, BHD,     &
@@ -302,24 +305,29 @@ CONTAINS
     USE W3GDATMD, ONLY: NX, NY, NSEA, NSEAL, NSPEC, MAPSTA, MAPST2, &
          GNAME, FILEXT, GTYPE, UNGTYPE
     USE W3TRIAMD, ONLY: SET_UG_IOBP
-    USE W3WDATMD
+    USE W3WDATMD, only : DINIT, VA, TIME, TLEV, TICE, TRHO, ICE, UST
+    USE W3WDATMD, only : USTDIR, ASF, FPIS, ICEF, TIC1, TIC5, WLV
 #ifdef W3_WRST
     USE W3IDATMD, ONLY: WXN, WYN, W3SETI
     USE W3IDATMD, ONLY: WXNwrst, WYNwrst
 #endif
     USE W3ODATMD, ONLY: NDSE, NDST, IAPROC, NAPROC, NAPERR, NAPRST, &
-         IFILE => IFILE4, FNMPRE, NTPROC, IOSTYP,    &
+         IFILE => IFILE4, FNMPRE, FNMRST, IOSTYP,    &
          FLOGRR, NOGRP, NGRPP, SCREEN
+#ifdef W3_T
+    USE W3ODATMD, ONLY: NTPROC
+#endif
+    !/
 #ifdef W3_MPI
     USE W3ODATMD, ONLY: NRQRS, NBLKRS, RSBLKS, IRQRS, IRQRSS,  &
          VAAUX
     USE W3ADATMD, ONLY: MPI_COMM_WCMP
+    USE mpi_f08 
 #endif
     !/
-    USE W3SERVMD, ONLY: EXTCDE
+    USE W3SERVMD, ONLY: EXTCDE, EXTIOF
     USE CONSTANTS, only: LPDLIB, file_endian
     USE W3PARALL, ONLY: INIT_GET_ISEA, INIT_GET_JSEA_ISPROC
-    USE W3GDATMD, ONLY: NK, NTH
 #ifdef W3_TIMINGS
     USE W3PARALL, ONLY: PRINT_MY_TIME
 #endif
@@ -332,9 +340,6 @@ CONTAINS
     !
     IMPLICIT NONE
     !
-#ifdef W3_MPI
-    INCLUDE "mpif.h"
-#endif
     !/
     !/ ------------------------------------------------------------------- /
     !/ Parameter list
@@ -353,19 +358,21 @@ CONTAINS
     !
     INTEGER                 :: IGRD, I, J, LRECL, NSIZE, IERR,      &
          NSEAT, MSPEC, TTIME(2), ISEA, JSEA,  &
-         NREC, NPART, IPART, IX, IY, IXL, IP, &
-         NPRTX2, NPRTY2, IYL, ITMP
+         NREC, NPART, IPART, IY, IXL, NPRTX2, NPRTY2, ITMP
     INTEGER, ALLOCATABLE    :: MAPTMP(:,:)
+#ifdef W3_WRST
+    INTEGER                 :: IX, IYL
+#endif
 #ifdef W3_S
     INTEGER, SAVE           :: IENT = 0
 #endif
 #ifdef W3_MPI
     INTEGER                 :: IERR_MPI, IH, IB, ISEA0, ISEAN, &
-         NRQ, NSEAL_MIN
+         NRQ, NSEAL_MIN, IP
 #endif
     INTEGER(KIND=8)         :: RPOS
 #ifdef W3_MPI
-    INTEGER, ALLOCATABLE    :: STAT1(:,:), STAT2(:,:)
+    type(MPI_STATUS), ALLOCATABLE :: STAT1(:), STAT2(:)
     REAL, ALLOCATABLE       :: VGBUFF(:), VLBUFF(:)
 #endif
     REAL(KIND=LRB), ALLOCATABLE :: WRITEBUFF(:), TMP(:), TMP2(:)
@@ -380,6 +387,10 @@ CONTAINS
     CHARACTER(LEN=26)       :: IDTST
     CHARACTER(LEN=30)       :: TNAME
     CHARACTER(LEN=15)       :: TIMETAG
+
+    ! DEFINED A LOCAL FNMPRE TO AVOID CHANGE THE GLOBAL VALUE
+    CHARACTER(LEN=256)       :: FNMPRE_LOCAL
+
     !/
     !/ ------------------------------------------------------------------- /
     !/
@@ -413,7 +424,7 @@ CONTAINS
     !
     IF (INXOUT.NE.'READ' .AND. INXOUT.NE.'HOT'  .AND.               &
          INXOUT.NE.'COLD' .AND. INXOUT.NE.'WIND' .AND.               &
-         INXOUT.NE.'CALM' ) THEN
+         INXOUT.NE.'CALM' .AND. INXOUT.NE.'FTCH') THEN
       IF ( IAPROC .EQ. NAPERR ) WRITE (NDSE,900) INXOUT
       CALL EXTCDE ( 1 )
     END IF
@@ -457,8 +468,15 @@ CONTAINS
     !
     ! open file ---------------------------------------------------------- *
     !
+    IF (LEN_TRIM(FNMRST) .EQ. 0) THEN
+      FNMPRE_LOCAL = FNMPRE
+    ELSE
+      FNMPRE_LOCAL = FNMRST
+    END IF
+    !
+
     I      = LEN_TRIM(FILEXT)
-    J      = LEN_TRIM(FNMPRE)
+    J      = LEN_TRIM(FNMPRE_LOCAL)
     !
     !CHECKPOINT RESTART FILE
     ITMP=0
@@ -494,83 +512,101 @@ CONTAINS
     ENDIF
 
     IF ( WRITE ) THEN
+      IERR = 0
       IF ( .NOT.IOSFLG .OR. IAPROC.EQ.NAPRST )                    &
-           OPEN (NDSR,FILE=FNMPRE(:J)//FNAME,form='UNFORMATTED', convert=file_endian,       &
-           ACCESS='STREAM',ERR=800,IOSTAT=IERR)
+           OPEN (NDSR,FILE=FNMPRE_LOCAL(:J)//FNAME,form='UNFORMATTED', convert=file_endian,       &
+           ACCESS='STREAM',IOSTAT=IERR)
     ELSE
-      OPEN (NDSR,FILE=FNMPRE(:J)//FNAME,form='UNFORMATTED', convert=file_endian,       &
-           ACCESS='STREAM',ERR=800,IOSTAT=IERR,                  &
-           STATUS='OLD',ACTION='READ')
+      OPEN (NDSR,FILE=FNMPRE_LOCAL(:J)//FNAME,form='UNFORMATTED', convert=file_endian,       &
+           ACCESS='STREAM',IOSTAT=IERR,STATUS='OLD',ACTION='READ')
     END IF
     !
-    ! test info ---------------------------------------------------------- *
-    !
-    IF ( WRITE ) THEN
+    ! In/Out file is successfully opened
+    IF (IERR .EQ. 0) THEN
       !
-      IF ( IAPROC .EQ. NAPRST ) THEN
-        !           Because data has mixed data types we do not know how many
-        !           bytes remain to fill up to LRECL. ---
-        !           --- Make the entire record zero ---
-        WRITEBUFF(:) = 0.
-        WRITE (NDSR,POS=1) WRITEBUFF
-        !           --- Replace zeros with data ---
-        WRITE (NDSR,POS=1) IDSTR, VERINI, GNAME, TYPE, NSEA,      &
-             NSPEC, FLOGRR
-      END IF
-      RSTYPE = 3
+      ! test info ---------------------------------------------------------- *
       !
-    ELSE
-      READ (NDSR,POS=1,ERR=802,IOSTAT=IERR)                       &
-           IDTST, VERTST, TNAME, TYPE, NSEAT, MSPEC, FLOGOA
-      !
-      IF ( IDTST .NE. IDSTR ) THEN
-        IF ( IAPROC .EQ. NAPERR )                               &
-             WRITE (NDSE,901) IDTST, IDSTR
-        CALL EXTCDE ( 10 )
-      END IF
-      IF ( VERTST .NE. VERINI ) THEN
-        IF ( IAPROC .EQ. NAPERR )                               &
-             WRITE (NDSE,902) VERTST, VERINI
-        CALL EXTCDE ( 11 )
-      END IF
-      IF ( TNAME .NE. GNAME ) THEN
-        IF ( IAPROC .EQ. NAPERR )                               &
-             WRITE (NDSE,903) TNAME, GNAME
-      END IF
-      IF (TYPE.NE.'FULL' .AND. TYPE.NE.'COLD' .AND.               &
-           TYPE.NE.'WIND' .AND. TYPE.NE.'CALM' ) THEN
-        IF ( IAPROC .EQ. NAPERR )                               &
-             WRITE (NDSE,904) TYPE
-        CALL EXTCDE ( 12 )
-      END IF
-      IF (NSEAT.NE.NSEA .OR. NSPEC.NE.MSPEC) THEN
-        IF ( IAPROC .EQ. NAPERR )                               &
-             WRITE (NDSE,905) MSPEC, NSEAT, NSPEC, NSEA
-        CALL EXTCDE ( 13 )
-      END IF
-      IF (TYPE.EQ.'FULL') THEN
-        RSTYPE = 2
-      ELSE IF (TYPE.EQ.'WIND') THEN
-        RSTYPE = 1
-      ELSE IF (TYPE.EQ.'CALM') THEN
-        RSTYPE = 4
+      IF ( WRITE ) THEN
+        !
+        IF ( IAPROC .EQ. NAPRST ) THEN
+          !           Because data has mixed data types we do not know how many
+          !           bytes remain to fill up to LRECL. ---
+          !           --- Make the entire record zero ---
+          WRITEBUFF(:) = 0.
+          WRITE (NDSR,POS=1) WRITEBUFF
+          !           --- Replace zeros with data ---
+          WRITE (NDSR,POS=1) IDSTR, VERINI, GNAME, TYPE, NSEA,      &
+               NSPEC, FLOGRR
+        END IF
+        RSTYPE = 3
+        !
       ELSE
-        RSTYPE = 0
-      END IF
+        READ (NDSR,POS=1,IOSTAT=IERR)                       &
+             IDTST, VERTST, TNAME, TYPE, NSEAT, MSPEC, FLOGOA
+        IF (IERR.NE.0) CALL EXTIOF(NDSE,IERR,'W3IORS','',30)
+        !
+        IF ( IDTST .NE. IDSTR ) THEN
+          IF ( IAPROC .EQ. NAPERR )                               &
+               WRITE (NDSE,901) IDTST, IDSTR
+          CALL EXTCDE ( 10 )
+        END IF
+        IF ( VERTST .NE. VERINI ) THEN
+          IF ( IAPROC .EQ. NAPERR )                               &
+               WRITE (NDSE,902) VERTST, VERINI
+          CALL EXTCDE ( 11 )
+        END IF
+        IF ( TNAME .NE. GNAME ) THEN
+          IF ( IAPROC .EQ. NAPERR )                               &
+               WRITE (NDSE,903) TNAME, GNAME
+        END IF
+        IF (TYPE.NE.'FULL' .AND. TYPE.NE.'COLD' .AND.               &
+             TYPE.NE.'WIND' .AND. TYPE.NE.'CALM' .AND. TYPE.NE.'FTCH' ) THEN
+          IF ( IAPROC .EQ. NAPERR )                               &
+               WRITE (NDSE,904) TYPE
+          CALL EXTCDE ( 12 )
+        END IF
+        IF (NSEAT.NE.NSEA .OR. NSPEC.NE.MSPEC) THEN
+          IF ( IAPROC .EQ. NAPERR )                               &
+               WRITE (NDSE,905) MSPEC, NSEAT, NSPEC, NSEA
+          CALL EXTCDE ( 13 )
+        END IF
+        IF (TYPE.EQ.'FULL') THEN
+          RSTYPE = 2
+        ELSE IF (TYPE.EQ.'WIND' .OR. TYPE.EQ.'FTCH') THEN
+          RSTYPE = 1
+        ELSE IF (TYPE.EQ.'CALM') THEN
+          RSTYPE = 4
+        ELSE
+          RSTYPE = 0
+        END IF
 
-      IF (.NOT. WRITE .AND. OARST .AND. IAPROC .EQ. NAPROC) THEN
-        DO I=1, NOGRP
-          DO J=1, NGRPP
-            IF (FLOGRR(I,J) .AND. .NOT. FLOGOA(I,J)) THEN
-              WRITE(SCREEN,1000) I, J
-            ENDIF
+        IF (.NOT. WRITE .AND. OARST .AND. IAPROC .EQ. NAPROC) THEN
+          DO I=1, NOGRP
+            DO J=1, NGRPP
+              IF (FLOGRR(I,J) .AND. .NOT. FLOGOA(I,J)) THEN
+                WRITE(SCREEN,1000) I, J
+              ENDIF
+            ENDDO
           ENDDO
-        ENDDO
-      ENDIF
+        ENDIF
+        !
+      END IF
+    ELSE
+#ifdef W3_LN0
+      TYPE   = 'WIND'
+      RSTYPE = 1
+#endif
+#ifdef W3_SEED
+      TYPE   = 'CALM'
+      RSTYPE = 4
+#endif
+#ifdef W3_LN1
+      TYPE   = 'CALM'
+      RSTYPE = 4
+#endif
+      IF ( IAPROC .EQ. NAPERR ) WRITE (NDSE,990) TYPE, IERR
       !
-    END IF
-    !
-100 CONTINUE
+    END IF  ! In/Out file is successfully opened
     !
 #ifdef W3_T
     WRITE (NDST,9002) IDSTR, VERINI, GNAME, TYPE,                &
@@ -588,7 +624,8 @@ CONTAINS
           WRITE (NDSR,POS=RPOS) TIME
         END IF
       ELSE
-        READ (NDSR,POS=RPOS,ERR=802,IOSTAT=IERR) TTIME
+        READ (NDSR,POS=RPOS,IOSTAT=IERR) TTIME
+        IF (IERR.NE.0) CALL EXTIOF(NDSE,IERR,'W3IORS','',30)
         IF (TIME(1).NE.TTIME(1) .OR. TIME(2).NE.TTIME(2)) THEN
           IF ( IAPROC .EQ. NAPERR )                           &
                WRITE (NDSE,906) TTIME, TIME
@@ -608,7 +645,13 @@ CONTAINS
     !          ( Bail out if write for TYPE.EQ.'WIND' )
     !
     IF ( WRITE ) THEN
-      IF ( TYPE.EQ.'WIND' .OR. TYPE.EQ.'CALM' ) THEN
+      IF ( TYPE.EQ.'FTCH' ) THEN
+        RPOS = 1_8 + LRECL*(3-1_8)
+        WRITE (NDSR,POS=RPOS,IOSTAT=IERR) FETCH
+        IF (IERR.NE.0) CALL EXTIOF(NDSE,IERR,'W3IORS','',31, &
+                                   ISWRITE=.TRUE.,POS=RPOS)
+      ENDIF
+      IF ( TYPE.EQ.'WIND' .OR. TYPE.EQ.'CALM' .OR. TYPE.EQ.'FTCH' ) THEN
         IF ( .NOT.IOSFLG .OR. IAPROC.EQ.NAPRST ) THEN
           CLOSE ( NDSR )
         END IF
@@ -635,7 +678,9 @@ CONTAINS
             RPOS  = 1_8 + LRECL*(NREC-1_8)
             WRITEBUFF(:) = 0.
             WRITEBUFF(1:NSPEC) = VA(1:NSPEC,JSEA)
-            WRITE (NDSR,POS=RPOS,ERR=803,IOSTAT=IERR) WRITEBUFF
+            WRITE (NDSR,POS=RPOS,IOSTAT=IERR) WRITEBUFF
+            IF (IERR.NE.0) CALL EXTIOF(NDSE,IERR,'W3IORS','',31, &
+                                       ISWRITE=.TRUE.,POS=RPOS)
           END DO
 #else
           DO JSEA=1, NSEA
@@ -644,7 +689,9 @@ CONTAINS
             RPOS  = 1_8 + LRECL*(NREC-1_8)
             WRITEBUFF(:) = 0.
             WRITEBUFF(1:NSPEC) = VA(1:NSPEC,JSEA)
-            WRITE (NDSR,POS=RPOS,ERR=803,IOSTAT=IERR) WRITEBUFF
+            WRITE (NDSR,POS=RPOS,IOSTAT=IERR) WRITEBUFF
+            IF (IERR.NE.0) CALL EXTIOF(NDSE,IERR,'W3IORS','',31, &
+                                       ISWRITE=.TRUE.,POS=RPOS)
           END DO
 #endif
           !
@@ -675,7 +722,7 @@ CONTAINS
               NRQ    = NAPROC
             END IF
             !
-            ALLOCATE ( STAT1(MPI_STATUS_SIZE,NRQ) )
+            ALLOCATE ( STAT1(NRQ) )
             IF ( IAPROC .EQ. NAPRST ) CALL MPI_STARTALL    &
                  ( NRQ, IRQRSS, IERR_MPI )
             !
@@ -687,11 +734,11 @@ CONTAINS
                 !
                 IH     = 1 + NRQ * (IB-1)
                 CALL MPI_WAITALL                         &
-                     ( NRQ, IRQRSS(IH), STAT1, IERR_MPI )
+                     ( NRQ, IRQRSS(IH:IH+NRQ-1), STAT1, IERR_MPI )
                 IF ( IB .LT. NBLKRS ) THEN
                   IH     = 1 + NRQ * IB
                   CALL MPI_STARTALL                    &
-                       ( NRQ, IRQRSS(IH), IERR_MPI )
+                       ( NRQ, IRQRSS(IH:IH+NRQ-1), IERR_MPI )
                 END IF
                 !
                 DO ISEA=ISEA0, ISEAN
@@ -705,16 +752,17 @@ CONTAINS
                     JSEA   = JSEA - 2*((IB-1)/2)*RSBLKS
                     WRITEBUFF(1:NSPEC) = VAAUX(1:NSPEC,JSEA,IP)
                   END IF
-                  WRITE (NDSR,POS=RPOS,ERR=803,IOSTAT=IERR) &
-                       WRITEBUFF
+                  WRITE (NDSR,POS=RPOS,IOSTAT=IERR) WRITEBUFF
+                  IF (IERR.NE.0) CALL EXTIOF(NDSE,IERR,'W3IORS','',31, &
+                                             ISWRITE=.TRUE.,POS=RPOS)
                 END DO
                 !
               ELSE
                 !
                 CALL MPI_STARTALL                        &
-                     ( 1, IRQRSS(IB), IERR_MPI )
+                     ( 1, IRQRSS(IB:IB), IERR_MPI )
                 CALL MPI_WAITALL                         &
-                     ( 1, IRQRSS(IB), STAT1, IERR_MPI )
+                     ( 1, IRQRSS(IB:IB), STAT1(1:1), IERR_MPI )
                 !
               END IF
             END DO
@@ -730,7 +778,14 @@ CONTAINS
       !
       ! Reading spectra
       !
-      IF ( TYPE.EQ.'WIND' .OR. TYPE.EQ.'CALM' ) THEN
+      IF ( TYPE.EQ.'FTCH') THEN
+        RPOS  = 1_8 + LRECL*(3-1_8)
+        READ(NDSR, POS=RPOS,IOSTAT=IERR) FETCH
+        IF (IERR.NE.0) CALL EXTIOF(NDSE,IERR,'W3IORS','',30)
+      ELSEIF ( TYPE.EQ.'WIND') THEN
+        FETCH = 0
+      ENDIF
+      IF ( TYPE.EQ.'WIND' .OR. TYPE.EQ.'CALM' .OR. TYPE.EQ.'FTCH' ) THEN
 #ifdef W3_T
         WRITE (NDST,9020) TYPE
 #endif
@@ -765,7 +820,8 @@ CONTAINS
                 !                Read NAPROC records into buffer VGBUFF. ------------- *
                 IF ( IAPROC .EQ. NAPROC ) THEN
                   RPOS = 1_8 + (2 + (JSEA - 1_8) * NAPROC) * LRECL
-                  READ(NDSR, POS=RPOS,ERR=802,IOSTAT=IERR) VGBUFF(:)
+                  READ(NDSR, POS=RPOS,IOSTAT=IERR) VGBUFF(:)
+                  IF (IERR.NE.0) CALL EXTIOF(NDSE,IERR,'W3IORS','',30)
                 ELSE
                   VGBUFF(:) = 0.
                 END IF
@@ -783,8 +839,9 @@ CONTAINS
                 CALL INIT_GET_ISEA(ISEA, JSEA)
                 NREC = ISEA + 2
                 RPOS = 1_8 + LRECL*(NREC-1_8)
-                READ (NDSR, POS=RPOS, ERR=802, IOSTAT=IERR)          &
+                READ (NDSR, POS=RPOS,IOSTAT=IERR)          &
                      (VA(I,JSEA), I=1,NSPEC)
+                IF (IERR.NE.0) CALL EXTIOF(NDSE,IERR,'W3IORS','',30)
               END IF
               !
               DEALLOCATE( VGBUFF )
@@ -800,8 +857,9 @@ CONTAINS
               CALL INIT_GET_ISEA(ISEA, JSEA)
               NREC   = ISEA + 2
               RPOS   = 1_8 + LRECL*(NREC-1_8)
-              READ (NDSR,POS=RPOS,ERR=802,IOSTAT=IERR)              &
+              READ (NDSR,POS=RPOS,IOSTAT=IERR)              &
                    (VA(I,JSEA),I=1,NSPEC)
+              IF (IERR.NE.0) CALL EXTIOF(NDSE,IERR,'W3IORS','',30)
             ENDDO
 #ifdef W3_MPI
           END IF
@@ -834,7 +892,7 @@ CONTAINS
           !
 #ifdef W3_MPI
           if (associated(irqrs)) then
-            ALLOCATE ( STAT2(MPI_STATUS_SIZE,NRQRS) )
+            ALLOCATE ( STAT2(NRQRS) )
             CALL MPI_WAITALL                               &
                  ( NRQRS, IRQRS , STAT2, IERR_MPI )
             DEALLOCATE ( STAT2 )
@@ -843,24 +901,36 @@ CONTAINS
           !
           RPOS  = 1_8 + LRECL*(NREC-1_8)
           WRITEBUFF(:) = 0.
-          WRITE (NDSR,POS=RPOS,ERR=803,IOSTAT=IERR) WRITEBUFF
-          WRITE (NDSR,POS=RPOS,ERR=803,IOSTAT=IERR)           &
+          WRITE (NDSR,POS=RPOS,IOSTAT=IERR) WRITEBUFF
+          IF (IERR.NE.0) CALL EXTIOF(NDSE,IERR,'W3IORS','',31, &
+                                     ISWRITE=.TRUE.,POS=RPOS)
+          WRITE (NDSR,POS=RPOS,IOSTAT=IERR)           &
                TLEV, TICE, TRHO, TIC1, TIC5
+          IF (IERR.NE.0) CALL EXTIOF(NDSE,IERR,'W3IORS','',31, &
+                                     ISWRITE=.TRUE.,POS=RPOS)
           DO IPART=1,NPART
             NREC  = NREC + 1
             RPOS  = 1_8 + LRECL*(NREC-1_8)
-            WRITE (NDSR,POS=RPOS,ERR=803,IOSTAT=IERR) WRITEBUFF
-            WRITE (NDSR,POS=RPOS,ERR=803,IOSTAT=IERR)         &
+            WRITE (NDSR,POS=RPOS,IOSTAT=IERR) WRITEBUFF
+            IF (IERR.NE.0) CALL EXTIOF(NDSE,IERR,'W3IORS','',31, &
+                                       ISWRITE=.TRUE.,POS=RPOS)
+            WRITE (NDSR,POS=RPOS,IOSTAT=IERR)         &
                  (WLV(ISEA),ISEA=1+(IPART-1)*NSIZE,          &
                  MIN(NSEA,IPART*NSIZE))
+            IF (IERR.NE.0) CALL EXTIOF(NDSE,IERR,'W3IORS','',31, &
+                                       ISWRITE=.TRUE.,POS=RPOS)
           END DO
           DO IPART=1,NPART
             NREC  = NREC + 1
             RPOS  = 1_8 + LRECL*(NREC-1_8)
-            WRITE (NDSR,POS=RPOS,ERR=803,IOSTAT=IERR) WRITEBUFF
-            WRITE (NDSR,POS=RPOS,ERR=803,IOSTAT=IERR)         &
+            WRITE (NDSR,POS=RPOS,IOSTAT=IERR) WRITEBUFF
+            IF (IERR.NE.0) CALL EXTIOF(NDSE,IERR,'W3IORS','',31, &
+                                       ISWRITE=.TRUE.,POS=RPOS)
+            WRITE (NDSR,POS=RPOS,IOSTAT=IERR)         &
                  (ICE(ISEA),ISEA=1+(IPART-1)*NSIZE,          &
                  MIN(NSEA,IPART*NSIZE))
+            IF (IERR.NE.0) CALL EXTIOF(NDSE,IERR,'W3IORS','',31, &
+                                       ISWRITE=.TRUE.,POS=RPOS)
           END DO
 
 #ifdef W3_WRST
@@ -876,20 +946,28 @@ CONTAINS
             DO IPART=1,NPRTY2
               NREC  = NREC + 1
               RPOS  = 1_8 + LRECL*(NREC-1_8)
-              WRITE (NDSR,POS=RPOS,ERR=803,IOSTAT=IERR) WRITEBUFF
-              WRITE (NDSR,POS=RPOS,ERR=803,IOSTAT=IERR)       &
+              WRITE (NDSR,POS=RPOS,IOSTAT=IERR) WRITEBUFF
+              IF (IERR.NE.0) CALL EXTIOF(NDSE,IERR,'W3IORS','',31, &
+                                         ISWRITE=.TRUE.,POS=RPOS)
+              WRITE (NDSR,POS=RPOS,IOSTAT=IERR)       &
                    (WXN(IX,IYL),IYL=1+(IPART-1)*NSIZE,         &
                    MIN(NY,IPART*NSIZE))
+              IF (IERR.NE.0) CALL EXTIOF(NDSE,IERR,'W3IORS','',31, &
+                                         ISWRITE=.TRUE.,POS=RPOS)
             END DO
           END DO
           DO IX=1, NX
             DO IPART=1,NPRTY2
               NREC  = NREC + 1
               RPOS  = 1_8 + LRECL*(NREC-1_8)
-              WRITE (NDSR,POS=RPOS,ERR=803,IOSTAT=IERR) WRITEBUFF
-              WRITE (NDSR,POS=RPOS,ERR=803,IOSTAT=IERR)       &
+              WRITE (NDSR,POS=RPOS,IOSTAT=IERR) WRITEBUFF
+              IF (IERR.NE.0) CALL EXTIOF(NDSE,IERR,'W3IORS','',31, &
+                                         ISWRITE=.TRUE.,POS=RPOS)
+              WRITE (NDSR,POS=RPOS,IOSTAT=IERR)       &
                    (WYN(IX,IYL),IYL=1+(IPART-1)*NSIZE,         &
                    MIN(NY,IPART*NSIZE))
+              IF (IERR.NE.0) CALL EXTIOF(NDSE,IERR,'W3IORS','',31, &
+                                         ISWRITE=.TRUE.,POS=RPOS)
             END DO
           END DO
 #endif
@@ -899,45 +977,64 @@ CONTAINS
             DO IPART=1,NPRTX2
               NREC  = NREC + 1
               RPOS  = 1_8 + LRECL*(NREC-1_8)
-              WRITE (NDSR,POS=RPOS,ERR=803,IOSTAT=IERR)       &
-                   WRITEBUFF
-              WRITE (NDSR,POS=RPOS,ERR=803,IOSTAT=IERR)       &
+              WRITE (NDSR,POS=RPOS,IOSTAT=IERR) WRITEBUFF
+              IF (IERR.NE.0) CALL EXTIOF(NDSE,IERR,'W3IORS','',31, &
+                                         ISWRITE=.TRUE.,POS=RPOS)
+              WRITE (NDSR,POS=RPOS,IOSTAT=IERR)       &
                    (MAPTMP(IY,IXL),IXL=1+(IPART-1)*NSIZE,    &
                    MIN(NX,IPART*NSIZE))
+              IF (IERR.NE.0) CALL EXTIOF(NDSE,IERR,'W3IORS','',31, &
+                                         ISWRITE=.TRUE.,POS=RPOS)
             END DO
           END DO
           DEALLOCATE ( MAPTMP )
           DO IPART=1,NPART
             NREC  = NREC + 1
             RPOS  = 1_8 + LRECL*(NREC-1_8)
-            WRITE (NDSR,POS=RPOS,ERR=803,IOSTAT=IERR) WRITEBUFF
-            WRITE (NDSR,POS=RPOS,ERR=803,IOSTAT=IERR)         &
+            WRITE (NDSR,POS=RPOS,IOSTAT=IERR) WRITEBUFF
+            IF (IERR.NE.0) CALL EXTIOF(NDSE,IERR,'W3IORS','',31, &
+                                       ISWRITE=.TRUE.,POS=RPOS)
+            WRITE (NDSR,POS=RPOS,IOSTAT=IERR)         &
                  (UST(ISEA),ISEA=1+(IPART-1)*NSIZE,          &
                  MIN(NSEA,IPART*NSIZE))
+            IF (IERR.NE.0) CALL EXTIOF(NDSE,IERR,'W3IORS','',31, &
+                                       ISWRITE=.TRUE.,POS=RPOS)
           END DO
           DO IPART=1,NPART
             NREC  = NREC + 1
             RPOS  = 1_8 + LRECL*(NREC-1_8)
-            WRITE (NDSR,POS=RPOS,ERR=803,IOSTAT=IERR) WRITEBUFF
-            WRITE (NDSR,POS=RPOS,ERR=803,IOSTAT=IERR)         &
+            WRITE (NDSR,POS=RPOS,IOSTAT=IERR) WRITEBUFF
+            IF (IERR.NE.0) CALL EXTIOF(NDSE,IERR,'W3IORS','',31, &
+                                       ISWRITE=.TRUE.,POS=RPOS)
+            WRITE (NDSR,POS=RPOS,IOSTAT=IERR)         &
                  (USTDIR(ISEA),ISEA=1+(IPART-1)*NSIZE,       &
                  MIN(NSEA,IPART*NSIZE))
+            IF (IERR.NE.0) CALL EXTIOF(NDSE,IERR,'W3IORS','',31, &
+                                       ISWRITE=.TRUE.,POS=RPOS)
           END DO
           DO IPART=1,NPART
             NREC  = NREC + 1
             RPOS  = 1_8 + LRECL*(NREC-1_8)
-            WRITE (NDSR,POS=RPOS,ERR=803,IOSTAT=IERR) WRITEBUFF
-            WRITE (NDSR,POS=RPOS,ERR=803,IOSTAT=IERR)         &
+            WRITE (NDSR,POS=RPOS,IOSTAT=IERR) WRITEBUFF
+            IF (IERR.NE.0) CALL EXTIOF(NDSE,IERR,'W3IORS','',31, &
+                                       ISWRITE=.TRUE.,POS=RPOS)
+            WRITE (NDSR,POS=RPOS,IOSTAT=IERR)         &
                  (ASF(ISEA),ISEA=1+(IPART-1)*NSIZE,          &
                  MIN(NSEA,IPART*NSIZE))
+            IF (IERR.NE.0) CALL EXTIOF(NDSE,IERR,'W3IORS','',31, &
+                                       ISWRITE=.TRUE.,POS=RPOS)
           END DO
           DO IPART=1,NPART
             NREC  = NREC + 1
             RPOS  = 1_8 + LRECL*(NREC-1_8)
-            WRITE (NDSR,POS=RPOS,ERR=803,IOSTAT=IERR) WRITEBUFF
-            WRITE (NDSR,POS=RPOS,ERR=803,IOSTAT=IERR)         &
+            WRITE (NDSR,POS=RPOS,IOSTAT=IERR) WRITEBUFF
+            IF (IERR.NE.0) CALL EXTIOF(NDSE,IERR,'W3IORS','',31, &
+                                       ISWRITE=.TRUE.,POS=RPOS)
+            WRITE (NDSR,POS=RPOS,IOSTAT=IERR)         &
                  (FPIS(ISEA),ISEA=1+(IPART-1)*NSIZE,         &
                  MIN(NSEA,IPART*NSIZE))
+            IF (IERR.NE.0) CALL EXTIOF(NDSE,IERR,'W3IORS','',31, &
+                                       ISWRITE=.TRUE.,POS=RPOS)
           END DO
           IF (OARST) THEN
 #ifdef W3_MPI
@@ -945,67 +1042,89 @@ CONTAINS
 #endif
             !
             IF ( FLOGRR(1,2) ) THEN
-              WRITE(NDSR,ERR=803,IOSTAT=IERR) CX(1:NSEA)
-              WRITE(NDSR,ERR=803,IOSTAT=IERR) CY(1:NSEA)
+              WRITE(NDSR,IOSTAT=IERR) CX(1:NSEA)
+              IF (IERR.NE.0) CALL EXTIOF(NDSE,IERR,'W3IORS','',31, &
+                                         ISWRITE=.TRUE.,POS=RPOS)
+              WRITE(NDSR,IOSTAT=IERR) CY(1:NSEA)
+              IF (IERR.NE.0) CALL EXTIOF(NDSE,IERR,'W3IORS','',31, &
+                                         ISWRITE=.TRUE.,POS=RPOS)
             ENDIF
             IF ( FLOGRR(1,12) )                                 &
-                 WRITE(NDSR,ERR=803,IOSTAT=IERR) ICEF(1:NSEA)
+                 WRITE(NDSR,IOSTAT=IERR) ICEF(1:NSEA)
             IF ( FLOGRR(2,1) )                                  &
-                 WRITE(NDSR,ERR=803,IOSTAT=IERR) HS(1:NSEA)
+                 WRITE(NDSR,IOSTAT=IERR) HS(1:NSEA)
             IF ( FLOGRR(2,2) )                                  &
-                 WRITE(NDSR,ERR=803,IOSTAT=IERR) WLM(1:NSEA)
+                 WRITE(NDSR,IOSTAT=IERR) WLM(1:NSEA)
             IF ( FLOGRR(2,4) )                                  &
-                 WRITE(NDSR,ERR=803,IOSTAT=IERR) T0M1(1:NSEA)
+                 WRITE(NDSR,IOSTAT=IERR) T0M1(1:NSEA)
             IF ( FLOGRR(2,5) )                                  &
-                 WRITE(NDSR,ERR=803,IOSTAT=IERR) T01(1:NSEA)
+                 WRITE(NDSR,IOSTAT=IERR) T01(1:NSEA)
             IF ( FLOGRR(2,6) )                                  &
-                 WRITE(NDSR,ERR=803,IOSTAT=IERR) FP0(1:NSEA)
+                 WRITE(NDSR,IOSTAT=IERR) FP0(1:NSEA)
             IF ( FLOGRR(2,7) )                                  &
-                 WRITE(NDSR,ERR=803,IOSTAT=IERR) THM(1:NSEA)
+                 WRITE(NDSR,IOSTAT=IERR) THM(1:NSEA)
             IF ( FLOGRR(2,19) )                                 &
-                 WRITE(NDSR,ERR=803,IOSTAT=IERR) WNMEAN(1:NSEA)
+                 WRITE(NDSR,IOSTAT=IERR) WNMEAN(1:NSEA)
             IF ( FLOGRR(5,2) )                                  &
-                 WRITE(NDSR,ERR=803,IOSTAT=IERR) CHARN(1:NSEA)
+                 WRITE(NDSR,IOSTAT=IERR) CHARN(1:NSEA)
             IF ( FLOGRR(5,5) ) THEN
-              WRITE(NDSR,ERR=803,IOSTAT=IERR) TAUWIX(1:NSEA)
-              WRITE(NDSR,ERR=803,IOSTAT=IERR) TAUWIY(1:NSEA)
+              WRITE(NDSR,IOSTAT=IERR) TAUWIX(1:NSEA)
+              IF (IERR.NE.0) CALL EXTIOF(NDSE,IERR,'W3IORS','',31, &
+                                         ISWRITE=.TRUE.,POS=RPOS)
+              WRITE(NDSR,IOSTAT=IERR) TAUWIY(1:NSEA)
             ENDIF
             IF ( FLOGRR(5,11) )                                 &
-                 WRITE(NDSR,ERR=803,IOSTAT=IERR) TWS(1:NSEA)
+                 WRITE(NDSR,IOSTAT=IERR) TWS(1:NSEA)
             IF ( FLOGRR(6,2) ) THEN
-              WRITE(NDSR,ERR=803,IOSTAT=IERR) TAUOX(1:NSEA)
-              WRITE(NDSR,ERR=803,IOSTAT=IERR) TAUOY(1:NSEA)
+              WRITE(NDSR,IOSTAT=IERR) TAUOX(1:NSEA)
+              IF (IERR.NE.0) CALL EXTIOF(NDSE,IERR,'W3IORS','',31, &
+                                         ISWRITE=.TRUE.,POS=RPOS)
+              WRITE(NDSR,IOSTAT=IERR) TAUOY(1:NSEA)
             ENDIF
             IF ( FLOGRR(6,3) )                                  &
-                 WRITE(NDSR,ERR=803,IOSTAT=IERR) BHD(1:NSEA)
+                 WRITE(NDSR,IOSTAT=IERR) BHD(1:NSEA)
             IF ( FLOGRR(6,4) )                                  &
-                 WRITE(NDSR,ERR=803,IOSTAT=IERR) PHIOC(1:NSEA)
+                 WRITE(NDSR,IOSTAT=IERR) PHIOC(1:NSEA)
             IF ( FLOGRR(6,5) ) THEN
-              WRITE(NDSR,ERR=803,IOSTAT=IERR) TUSX(1:NSEA)
-              WRITE(NDSR,ERR=803,IOSTAT=IERR) TUSY(1:NSEA)
+              WRITE(NDSR,IOSTAT=IERR) TUSX(1:NSEA)
+              IF (IERR.NE.0) CALL EXTIOF(NDSE,IERR,'W3IORS','',31, &
+                                         ISWRITE=.TRUE.,POS=RPOS)
+              WRITE(NDSR,IOSTAT=IERR) TUSY(1:NSEA)
             ENDIF
             IF ( FLOGRR(6,6) ) THEN
-              WRITE(NDSR,ERR=803,IOSTAT=IERR) USSX(1:NSEA)
-              WRITE(NDSR,ERR=803,IOSTAT=IERR) USSY(1:NSEA)
+              WRITE(NDSR,IOSTAT=IERR) USSX(1:NSEA)
+              IF (IERR.NE.0) CALL EXTIOF(NDSE,IERR,'W3IORS','',31, &
+                                         ISWRITE=.TRUE.,POS=RPOS)
+              WRITE(NDSR,IOSTAT=IERR) USSY(1:NSEA)
             ENDIF
             IF ( FLOGRR(6,10) ) THEN
-              WRITE(NDSR,ERR=803,IOSTAT=IERR) TAUICE(1:NSEA,1)
-              WRITE(NDSR,ERR=803,IOSTAT=IERR) TAUICE(1:NSEA,2)
+              WRITE(NDSR,IOSTAT=IERR) TAUICE(1:NSEA,1)
+              IF (IERR.NE.0) CALL EXTIOF(NDSE,IERR,'W3IORS','',31, &
+                                         ISWRITE=.TRUE.,POS=RPOS)
+              WRITE(NDSR,IOSTAT=IERR) TAUICE(1:NSEA,2)
             ENDIF
             IF ( FLOGRR(6,13) ) THEN
-              WRITE(NDSR,ERR=803,IOSTAT=IERR) TAUOCX(1:NSEA)
-              WRITE(NDSR,ERR=803,IOSTAT=IERR) TAUOCY(1:NSEA)
+              WRITE(NDSR,IOSTAT=IERR) TAUOCX(1:NSEA)
+              IF (IERR.NE.0) CALL EXTIOF(NDSE,IERR,'W3IORS','',31, &
+                                         ISWRITE=.TRUE.,POS=RPOS)
+              WRITE(NDSR,IOSTAT=IERR) TAUOCY(1:NSEA)
             ENDIF
             IF ( FLOGRR(7,2) ) THEN
-              WRITE(NDSR,ERR=803,IOSTAT=IERR) UBA(1:NSEA)
-              WRITE(NDSR,ERR=803,IOSTAT=IERR) UBD(1:NSEA)
+              WRITE(NDSR,IOSTAT=IERR) UBA(1:NSEA)
+              IF (IERR.NE.0) CALL EXTIOF(NDSE,IERR,'W3IORS','',31, &
+                                         ISWRITE=.TRUE.,POS=RPOS)
+              WRITE(NDSR,IOSTAT=IERR) UBD(1:NSEA)
             ENDIF
             IF ( FLOGRR(7,4) )                                  &
-                 WRITE(NDSR,ERR=803,IOSTAT=IERR) PHIBBL(1:NSEA)
+                 WRITE(NDSR,IOSTAT=IERR) PHIBBL(1:NSEA)
             IF ( FLOGRR(7,5) ) THEN
-              WRITE(NDSR,ERR=803,IOSTAT=IERR) TAUBBL(1:NSEA,1)
-              WRITE(NDSR,ERR=803,IOSTAT=IERR) TAUBBL(1:NSEA,2)
+              WRITE(NDSR,IOSTAT=IERR) TAUBBL(1:NSEA,1)
+              IF (IERR.NE.0) CALL EXTIOF(NDSE,IERR,'W3IORS','',31, &
+                                         ISWRITE=.TRUE.,POS=RPOS)
+              WRITE(NDSR,IOSTAT=IERR) TAUBBL(1:NSEA,2)
             ENDIF
+            IF (IERR.NE.0) CALL EXTIOF(NDSE,IERR,'W3IORS','',31, &
+                                       ISWRITE=.TRUE.,POS=RPOS)
             !
 #ifdef W3_MPI
             CALL W3SETA ( IGRD, NDSE, NDST )
@@ -1025,39 +1144,44 @@ CONTAINS
     ELSE
       IF (TYPE.EQ.'FULL') THEN
         RPOS = 1_8 + LRECL*(NREC-1_8)
-        READ (NDSR,POS=RPOS,ERR=802,IOSTAT=IERR)                &
+        READ (NDSR,POS=RPOS,IOSTAT=IERR)                &
              TLEV, TICE, TRHO, TIC1, TIC5
+        IF (IERR.NE.0) CALL EXTIOF(NDSE,IERR,'W3IORS','',30)
         DO IPART=1,NPART
           NREC  = NREC + 1
           RPOS = 1_8 + LRECL*(NREC-1_8)
-          READ (NDSR,POS=RPOS,ERR=802,IOSTAT=IERR)              &
+          READ (NDSR,POS=RPOS,IOSTAT=IERR)              &
                (WLV(ISEA),ISEA=1+(IPART-1)*NSIZE,              &
                MIN(NSEA,IPART*NSIZE))
+          IF (IERR.NE.0) CALL EXTIOF(NDSE,IERR,'W3IORS','',30)
         END DO
         DO IPART=1,NPART
           NREC  = NREC + 1
           RPOS = 1_8 + LRECL*(NREC-1_8)
-          READ (NDSR,POS=RPOS,ERR=802,IOSTAT=IERR)              &
+          READ (NDSR,POS=RPOS,IOSTAT=IERR)              &
                (ICE(ISEA),ISEA=1+(IPART-1)*NSIZE,              &
                MIN(NSEA,IPART*NSIZE))
+          IF (IERR.NE.0) CALL EXTIOF(NDSE,IERR,'W3IORS','',30)
         END DO
 #ifdef W3_WRST
         DO IX=1, NX
           DO IPART=1,NPRTY2
             NREC  = NREC + 1
             RPOS = 1_8 + LRECL*(NREC-1_8)
-            READ (NDSR,POS=RPOS,ERR=802,IOSTAT=IERR)              &
+            READ (NDSR,POS=RPOS,IOSTAT=IERR)              &
                  (WXNwrst(IX,IYL),IYL=1+(IPART-1)*NSIZE,         &
                  MIN(NY,IPART*NSIZE))
+            IF (IERR.NE.0) CALL EXTIOF(NDSE,IERR,'W3IORS','',30)
           END DO
         END DO
         DO IX=1, NX
           DO IPART=1,NPRTY2
             NREC  = NREC + 1
             RPOS = 1_8 + LRECL*(NREC-1_8)
-            READ (NDSR,POS=RPOS,ERR=802,IOSTAT=IERR)              &
+            READ (NDSR,POS=RPOS,IOSTAT=IERR)              &
                  (WYNwrst(IX,IYL),IYL=1+(IPART-1)*NSIZE,         &
                  MIN(NY,IPART*NSIZE))
+            IF (IERR.NE.0) CALL EXTIOF(NDSE,IERR,'W3IORS','',30)
           END DO
         END DO
 #endif
@@ -1066,9 +1190,10 @@ CONTAINS
           DO IPART=1,NPRTX2
             NREC  = NREC + 1
             RPOS  = 1_8 + LRECL*(NREC-1_8)
-            READ (NDSR,POS=RPOS,ERR=802,IOSTAT=IERR)            &
+            READ (NDSR,POS=RPOS,IOSTAT=IERR)            &
                  (MAPTMP(IY,IXL),IXL=1+(IPART-1)*NSIZE,        &
                  MIN(NX,IPART*NSIZE))
+            IF (IERR.NE.0) CALL EXTIOF(NDSE,IERR,'W3IORS','',30)
           END DO
         END DO
         MAPSTA = MOD(MAPTMP+2,8) - 2
@@ -1088,98 +1213,115 @@ CONTAINS
         DO IPART=1,NPART
           NREC  = NREC + 1
           RPOS  = 1_8 + LRECL*(NREC-1_8)
-          READ (NDSR,POS=RPOS,ERR=802,IOSTAT=IERR)              &
+          READ (NDSR,POS=RPOS,IOSTAT=IERR)              &
                (UST(ISEA),ISEA=1+(IPART-1)*NSIZE,              &
                MIN(NSEA,IPART*NSIZE))
+          IF (IERR.NE.0) CALL EXTIOF(NDSE,IERR,'W3IORS','',30)
         END DO
         DO IPART=1,NPART
           NREC  = NREC + 1
           RPOS  = 1_8 + LRECL*(NREC-1_8)
-          READ (NDSR,POS=RPOS,ERR=802,IOSTAT=IERR)              &
+          READ (NDSR,POS=RPOS,IOSTAT=IERR)              &
                (USTDIR(ISEA),ISEA=1+(IPART-1)*NSIZE,           &
                MIN(NSEA,IPART*NSIZE))
+          IF (IERR.NE.0) CALL EXTIOF(NDSE,IERR,'W3IORS','',30)
         END DO
         DO IPART=1,NPART
           NREC  = NREC + 1
           RPOS  = 1_8 + LRECL*(NREC-1_8)
-          READ (NDSR,POS=RPOS,ERR=802,IOSTAT=IERR)              &
+          READ (NDSR,POS=RPOS,IOSTAT=IERR)              &
                (ASF(ISEA),ISEA=1+(IPART-1)*NSIZE,              &
                MIN(NSEA,IPART*NSIZE))
+          IF (IERR.NE.0) CALL EXTIOF(NDSE,IERR,'W3IORS','',30)
         END DO
         DO IPART=1,NPART
           NREC  = NREC + 1
           RPOS  = 1_8 + LRECL*(NREC-1_8)
-          READ (NDSR,POS=RPOS,ERR=802,IOSTAT=IERR)              &
+          READ (NDSR,POS=RPOS,IOSTAT=IERR)              &
                (FPIS(ISEA),ISEA=1+(IPART-1)*NSIZE,             &
                MIN(NSEA,IPART*NSIZE))
+          IF (IERR.NE.0) CALL EXTIOF(NDSE,IERR,'W3IORS','',30)
         END DO
         IF (OARST) THEN
           IF ( FLOGOA(1,2) ) THEN
-            READ (NDSR,ERR=802,IOSTAT=IERR) CX(1:NSEA)
-            READ (NDSR,ERR=802,IOSTAT=IERR) CY(1:NSEA)
+            READ (NDSR,IOSTAT=IERR) CX(1:NSEA)
+            IF (IERR.NE.0) CALL EXTIOF(NDSE,IERR,'W3IORS','',30)
+            READ (NDSR,IOSTAT=IERR) CY(1:NSEA)
+            IF (IERR.NE.0) CALL EXTIOF(NDSE,IERR,'W3IORS','',30)
           ENDIF
           IF ( FLOGOA(1,12) ) THEN
-            READ (NDSR,ERR=802,IOSTAT=IERR) ICEF(1:NSEA)
+            READ (NDSR,IOSTAT=IERR) ICEF(1:NSEA)
+            IF (IERR.NE.0) CALL EXTIOF(NDSE,IERR,'W3IORS','',30)
           ENDIF
           IF ( FLOGOA(2,1) ) THEN
-            READ (NDSR,ERR=802,IOSTAT=IERR) TMP(1:NSEA)
+            READ (NDSR,IOSTAT=IERR) TMP(1:NSEA)
+            IF (IERR.NE.0) CALL EXTIOF(NDSE,IERR,'W3IORS','',30)
             DO I=1, NSEALM
               J = IAPROC + (I-1)*NAPROC
               IF (J .LE. NSEA) HS(I) = TMP(J)
             ENDDO
           ENDIF
           IF ( FLOGOA(2,2) ) THEN
-            READ (NDSR,ERR=802,IOSTAT=IERR) TMP(1:NSEA)
+            READ (NDSR,IOSTAT=IERR) TMP(1:NSEA)
+            IF (IERR.NE.0) CALL EXTIOF(NDSE,IERR,'W3IORS','',30)
             DO I=1, NSEALM
               J = IAPROC + (I-1)*NAPROC
               IF (J .LE. NSEA) WLM(I) = TMP(J)
             ENDDO
           ENDIF
           IF ( FLOGOA(2,4) ) THEN
-            READ (NDSR,ERR=802,IOSTAT=IERR) TMP(1:NSEA)
+            READ (NDSR,IOSTAT=IERR) TMP(1:NSEA)
+            IF (IERR.NE.0) CALL EXTIOF(NDSE,IERR,'W3IORS','',30)
             DO I=1, NSEALM
               J = IAPROC + (I-1)*NAPROC
               IF (J .LE. NSEA) T0M1(I) = TMP(J)
             ENDDO
           ENDIF
           IF ( FLOGOA(2,5) ) THEN
-            READ (NDSR,ERR=802,IOSTAT=IERR) TMP(1:NSEA)
+            READ (NDSR,IOSTAT=IERR) TMP(1:NSEA)
+            IF (IERR.NE.0) CALL EXTIOF(NDSE,IERR,'W3IORS','',30)
             DO I=1, NSEALM
               J = IAPROC + (I-1)*NAPROC
               IF (J .LE. NSEA) T01(I) = TMP(J)
             ENDDO
           ENDIF
           IF ( FLOGOA(2,6) ) THEN
-            READ (NDSR,ERR=802,IOSTAT=IERR) TMP(1:NSEA)
+            READ (NDSR,IOSTAT=IERR) TMP(1:NSEA)
+            IF (IERR.NE.0) CALL EXTIOF(NDSE,IERR,'W3IORS','',30)
             DO I=1, NSEALM
               J = IAPROC + (I-1)*NAPROC
               IF (J .LE. NSEA) FP0(I) = TMP(J)
             ENDDO
           ENDIF
           IF ( FLOGOA(2,7) ) THEN
-            READ (NDSR,ERR=802,IOSTAT=IERR) TMP(1:NSEA)
+            READ (NDSR,IOSTAT=IERR) TMP(1:NSEA)
+            IF (IERR.NE.0) CALL EXTIOF(NDSE,IERR,'W3IORS','',30)
             DO I=1, NSEALM
               J = IAPROC + (I-1)*NAPROC
               IF (J .LE. NSEA) THM(I) = TMP(J)
             ENDDO
           ENDIF
           IF ( FLOGOA(2,19) ) THEN
-            READ (NDSR,ERR=802,IOSTAT=IERR) TMP(1:NSEA)
+            READ (NDSR,IOSTAT=IERR) TMP(1:NSEA)
+            IF (IERR.NE.0) CALL EXTIOF(NDSE,IERR,'W3IORS','',30)
             DO I=1, NSEALM
               J = IAPROC + (I-1)*NAPROC
               IF (J .LE. NSEA) WNMEAN(I) = TMP(J)
             ENDDO
           ENDIF
           IF ( FLOGOA(5,2) ) THEN
-            READ (NDSR,ERR=802,IOSTAT=IERR) TMP(1:NSEA)
+            READ (NDSR,IOSTAT=IERR) TMP(1:NSEA)
+            IF (IERR.NE.0) CALL EXTIOF(NDSE,IERR,'W3IORS','',30)
             DO I=1, NSEALM
               J = IAPROC + (I-1)*NAPROC
               IF (J .LE. NSEA) CHARN(I) = TMP(J)
             ENDDO
           ENDIF
           IF ( FLOGOA(5,5) ) THEN
-            READ (NDSR,ERR=802,IOSTAT=IERR) TMP(1:NSEA)
-            READ (NDSR,ERR=802,IOSTAT=IERR) TMP2(1:NSEA)
+            READ (NDSR,IOSTAT=IERR) TMP(1:NSEA)
+            IF (IERR.NE.0) CALL EXTIOF(NDSE,IERR,'W3IORS','',30)
+            READ (NDSR,IOSTAT=IERR) TMP2(1:NSEA)
+            IF (IERR.NE.0) CALL EXTIOF(NDSE,IERR,'W3IORS','',30)
             DO I=1, NSEALM
               J = IAPROC + (I-1)*NAPROC
               IF (J .LE. NSEA) THEN
@@ -1189,15 +1331,18 @@ CONTAINS
             ENDDO
           ENDIF
           IF ( FLOGOA(5,11) ) THEN
-            READ (NDSR,ERR=802,IOSTAT=IERR) TMP(1:NSEA)
+            READ (NDSR,IOSTAT=IERR) TMP(1:NSEA)
+            IF (IERR.NE.0) CALL EXTIOF(NDSE,IERR,'W3IORS','',30)
             DO I=1, NSEALM
               J = IAPROC + (I-1)*NAPROC
               IF (J .LE. NSEA) TWS(I) = TMP(J)
             ENDDO
           ENDIF
           IF ( FLOGOA(6,2) ) THEN
-            READ (NDSR,ERR=802,IOSTAT=IERR) TMP(1:NSEA)
-            READ (NDSR,ERR=802,IOSTAT=IERR) TMP2(1:NSEA)
+            READ (NDSR,IOSTAT=IERR) TMP(1:NSEA)
+            IF (IERR.NE.0) CALL EXTIOF(NDSE,IERR,'W3IORS','',30)
+            READ (NDSR,IOSTAT=IERR) TMP2(1:NSEA)
+            IF (IERR.NE.0) CALL EXTIOF(NDSE,IERR,'W3IORS','',30)
             DO I=1, NSEALM
               J = IAPROC + (I-1)*NAPROC
               IF (J .LE. NSEA) THEN
@@ -1207,22 +1352,26 @@ CONTAINS
             ENDDO
           ENDIF
           IF ( FLOGOA(6,3) ) THEN
-            READ (NDSR,ERR=802,IOSTAT=IERR) TMP(1:NSEA)
+            READ (NDSR,IOSTAT=IERR) TMP(1:NSEA)
+            IF (IERR.NE.0) CALL EXTIOF(NDSE,IERR,'W3IORS','',30)
             DO I=1, NSEALM
               J = IAPROC + (I-1)*NAPROC
               IF (J .LE. NSEA) BHD(I) = TMP(J)
             ENDDO
           ENDIF
           IF ( FLOGOA(6,4) ) THEN
-            READ (NDSR,ERR=802,IOSTAT=IERR) TMP(1:NSEA)
+            READ (NDSR,IOSTAT=IERR) TMP(1:NSEA)
+            IF (IERR.NE.0) CALL EXTIOF(NDSE,IERR,'W3IORS','',30)
             DO I=1, NSEALM
               J = IAPROC + (I-1)*NAPROC
               IF (J .LE. NSEA) PHIOC(I) = TMP(J)
             ENDDO
           ENDIF
           IF ( FLOGOA(6,5) ) THEN
-            READ (NDSR,ERR=802,IOSTAT=IERR) TMP(1:NSEA)
-            READ (NDSR,ERR=802,IOSTAT=IERR) TMP2(1:NSEA)
+            READ (NDSR,IOSTAT=IERR) TMP(1:NSEA)
+            IF (IERR.NE.0) CALL EXTIOF(NDSE,IERR,'W3IORS','',30)
+            READ (NDSR,IOSTAT=IERR) TMP2(1:NSEA)
+            IF (IERR.NE.0) CALL EXTIOF(NDSE,IERR,'W3IORS','',30)
             DO I=1, NSEALM
               J = IAPROC + (I-1)*NAPROC
               IF (J .LE. NSEA) THEN
@@ -1232,8 +1381,10 @@ CONTAINS
             ENDDO
           ENDIF
           IF ( FLOGOA(6,6) ) THEN
-            READ (NDSR,ERR=802,IOSTAT=IERR) TMP(1:NSEA)
-            READ (NDSR,ERR=802,IOSTAT=IERR) TMP2(1:NSEA)
+            READ (NDSR,IOSTAT=IERR) TMP(1:NSEA)
+            IF (IERR.NE.0) CALL EXTIOF(NDSE,IERR,'W3IORS','',30)
+            READ (NDSR,IOSTAT=IERR) TMP2(1:NSEA)
+            IF (IERR.NE.0) CALL EXTIOF(NDSE,IERR,'W3IORS','',30)
             DO I=1, NSEALM
               J = IAPROC + (I-1)*NAPROC
               IF (J .LE. NSEA) THEN
@@ -1243,8 +1394,10 @@ CONTAINS
             ENDDO
           ENDIF
           IF ( FLOGOA(6,10) ) THEN
-            READ (NDSR,ERR=802,IOSTAT=IERR) TMP(1:NSEA)
-            READ (NDSR,ERR=802,IOSTAT=IERR) TMP2(1:NSEA)
+            READ (NDSR,IOSTAT=IERR) TMP(1:NSEA)
+            IF (IERR.NE.0) CALL EXTIOF(NDSE,IERR,'W3IORS','',30)
+            READ (NDSR,IOSTAT=IERR) TMP2(1:NSEA)
+            IF (IERR.NE.0) CALL EXTIOF(NDSE,IERR,'W3IORS','',30)
             DO I=1, NSEALM
               J = IAPROC + (I-1)*NAPROC
               IF (J .LE. NSEA) THEN
@@ -1254,8 +1407,10 @@ CONTAINS
             ENDDO
           ENDIF
           IF ( FLOGOA(6,13) ) THEN
-            READ (NDSR,ERR=802,IOSTAT=IERR) TMP(1:NSEA)
-            READ (NDSR,ERR=802,IOSTAT=IERR) TMP2(1:NSEA)
+            READ (NDSR,IOSTAT=IERR) TMP(1:NSEA)
+            IF (IERR.NE.0) CALL EXTIOF(NDSE,IERR,'W3IORS','',30)
+            READ (NDSR,IOSTAT=IERR) TMP2(1:NSEA)
+            IF (IERR.NE.0) CALL EXTIOF(NDSE,IERR,'W3IORS','',30)
             DO I=1, NSEALM
               J = IAPROC + (I-1)*NAPROC
               IF (J .LE. NSEA) THEN
@@ -1265,8 +1420,10 @@ CONTAINS
             ENDDO
           ENDIF
           IF ( FLOGOA(7,2) ) THEN
-            READ (NDSR,ERR=802,IOSTAT=IERR) TMP(1:NSEA)
-            READ (NDSR,ERR=802,IOSTAT=IERR) TMP2(1:NSEA)
+            READ (NDSR,IOSTAT=IERR) TMP(1:NSEA)
+            IF (IERR.NE.0) CALL EXTIOF(NDSE,IERR,'W3IORS','',30)
+            READ (NDSR,IOSTAT=IERR) TMP2(1:NSEA)
+            IF (IERR.NE.0) CALL EXTIOF(NDSE,IERR,'W3IORS','',30)
             DO I=1, NSEALM
               J = IAPROC + (I-1)*NAPROC
               IF (J .LE. NSEA) THEN
@@ -1276,15 +1433,18 @@ CONTAINS
             ENDDO
           ENDIF
           IF ( FLOGOA(7,4) ) THEN
-            READ (NDSR,ERR=802,IOSTAT=IERR) TMP(1:NSEA)
+            READ (NDSR,IOSTAT=IERR) TMP(1:NSEA)
+            IF (IERR.NE.0) CALL EXTIOF(NDSE,IERR,'W3IORS','',30)
             DO I=1, NSEALM
               J = IAPROC + (I-1)*NAPROC
               IF (J .LE. NSEA) PHIBBL(I) = TMP(J)
             ENDDO
           ENDIF
           IF ( FLOGOA(7,5) ) THEN
-            READ (NDSR,ERR=802,IOSTAT=IERR) TMP(1:NSEA)
-            READ (NDSR,ERR=802,IOSTAT=IERR) TMP2(1:NSEA)
+            READ (NDSR,IOSTAT=IERR) TMP(1:NSEA)
+            IF (IERR.NE.0) CALL EXTIOF(NDSE,IERR,'W3IORS','',30)
+            READ (NDSR,IOSTAT=IERR) TMP2(1:NSEA)
+            IF (IERR.NE.0) CALL EXTIOF(NDSE,IERR,'W3IORS','',30)
             DO I=1, NSEALM
               J = IAPROC + (I-1)*NAPROC
               IF (J .LE. NSEA) THEN
@@ -1303,6 +1463,7 @@ CONTAINS
         TICE(1) = -1
         TICE(2) =  0
         TRHO(1) = -1
+        TRHO(2) =  0
         TIC1(1) = -1
         TIC1(2) =  0
         TIC5(1) = -1
@@ -1370,37 +1531,6 @@ CONTAINS
     !
     RETURN
     !
-    ! Escape locations read errors :
-    !
-800 CONTINUE
-#ifdef W3_LN0
-    TYPE   = 'WIND'
-    RSTYPE = 1
-#endif
-#ifdef W3_SEED
-    TYPE   = 'CALM'
-    RSTYPE = 4
-#endif
-#ifdef W3_LN1
-    TYPE   = 'CALM'
-    RSTYPE = 4
-#endif
-    IF ( IAPROC .EQ. NAPERR ) WRITE (NDSE,990) TYPE, IERR
-    GOTO 100
-    !
-801 CONTINUE
-    IF ( IAPROC .EQ. NAPERR ) WRITE (NDSE,991)
-    CALL EXTCDE ( 30 )
-    !
-802 CONTINUE
-    IF ( IAPROC .EQ. NAPERR ) WRITE (NDSE,992) IERR
-    CALL EXTCDE ( 31 )
-    !
-803 CONTINUE
-    IF ( IAPROC .EQ. NAPERR ) WRITE (NDSE,993) IERR, RPOS
-    CALL EXTCDE ( 31 )
-    !
-    !
     ! Formats
     !
 900 FORMAT (/' *** WAVEWATCH III ERROR IN W3IORS :'/                &
@@ -1427,14 +1557,6 @@ CONTAINS
          '     NO READABLE RESTART FILE, ',                     &
          'INITIALIZE WITH ''',A,''' INSTEAD'/              &
          '     IOSTAT =',I5/)
-991 FORMAT (/' *** WAVEWATCH III ERROR IN W3IORS : '/               &
-         '     PREMATURE END OF FILE'/)
-992 FORMAT (/' *** WAVEWATCH III ERROR IN W3IORS : '/               &
-         '     ERROR IN READING FROM FILE'/                     &
-         '     IOSTAT =',I5/)
-993 FORMAT (/' *** WAVEWATCH III ERROR IN W3IORS : '/               &
-         '     ERROR IN WRITING TO FILE'/                       &
-         '     IOSTAT =',I5,', POS =',I11 /)
 1000 FORMAT (/' *** WAVEWATCH III WARNING IN W3IORS : '/             &
          '     REQUESTED EXTRA RESTART GROUP',I2,' FIELD',I2, / &
          '     IS NOT PRESENT IN THE RESTART FILE.'/            &
