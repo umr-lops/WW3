@@ -1081,6 +1081,7 @@ CONTAINS
     X2     = UNDEF
     XX     = UNDEF
     XY     = UNDEF
+    chunks = (/80, 80, 1, 1 /)
     ! CB: Dont output MAPSTA for SMC grid - it does not make sense
     IF( SMCGRD .AND. MAPSTAOUT) THEN
       WRITE(NDSO,*) "MAPSTA output disabled for SMC grids"
@@ -2590,12 +2591,16 @@ CONTAINS
                     ELSE
 #endif
                       IRET = NF90_DEF_VAR(NCID,META(I)%varnm, NF90_SHORT, DIMID(2:4+EXTRADIM), VARID(IVAR))
-                      IF (NCTYPE.EQ.4) IRET = NF90_DEF_VAR_DEFLATE(NCID, VARID(IVAR), 1, 1, NCDEFLATE)
-
 #ifdef W3_SMC
                     ENDIF
 #endif
                     CALL CHECK_ERR(IRET)
+                    IF (NCTYPE.EQ.4.AND.( .NOT.SMCGRD)) THEN 
+                       IRET = NF90_DEF_VAR_DEFLATE(NCID, VARID(IVAR), 1, 1, NCDEFLATE)
+                       CALL CHECK_ERR(IRET)
+                       IRET = NF90_DEF_VAR_CHUNKING(NCID, VARID(IVAR), NF90_CHUNKED, chunks(1:3+EXTRADIM))
+                       CALL CHECK_ERR(IRET)
+                    ENDIF 
                   ELSE
 #ifdef W3_SMC
                     IF( SMCGRD .AND. SMCOTYPE .EQ. 1 ) THEN
@@ -2604,26 +2609,14 @@ CONTAINS
                     ELSE
 #endif
                       IRET = NF90_DEF_VAR(NCID,META(I)%varnm, NF90_FLOAT, DIMID(2:4+EXTRADIM), VARID(IVAR))
-                      IF (NCTYPE.EQ.4) IRET = NF90_DEF_VAR_DEFLATE(NCID, VARID(IVAR), 1, 1, NCDEFLATE)
 #ifdef W3_SMC
                     ENDIF
 #endif
                     CALL CHECK_ERR(IRET)
+                    IF (NCTYPE.EQ.4) IRET = NF90_DEF_VAR_DEFLATE(NCID, VARID(IVAR), 1, 1, NCDEFLATE)
+                    IF (NCTYPE.EQ.4) CALL CHECK_ERR(IRET)
                   END IF
-                  ! adjusts chunk sizes to PUT_VAR statements ... 
-                  IF (NCTYPE.EQ.4.AND.( .NOT.SMCGRD)) THEN 
-                     IF (GTYPE.NE.UNGTYPE) THEN
-                        chunks = (/ IXN-IX1+1, 1, 1 , 1 /)   ! adjust chunk
-                     ELSE 
-                        chunks = (/ IXN-IX1+1, IYN-IY1+1, 1 , 1 /)   ! adjust chunk
-                     ENDIF  
-                     IRET = NF90_DEF_VAR_CHUNKING(NCID, VARID(IVAR), NF90_CHUNKED, chunks(1:3+EXTRADIM))
-                     CALL CHECK_ERR(IRET)
-                     IRET = NF90_DEF_VAR_DEFLATE(NCID, VARID(IVAR), 1, 1, NCDEFLATE)
-                     CALL CHECK_ERR(IRET)
-                  ENDIF
-
-                ELSE ! (NCVARTYPE.NE.2) 
+                ELSE
                   DIMFIELD(1)=DIMID(2)
                   DIMFIELD(2)=DIMID(4)
                   DIMFIELD(3)=DIMID(5)
