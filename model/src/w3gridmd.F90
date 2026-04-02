@@ -1864,6 +1864,11 @@ CONTAINS
     WRITE (NDSO,922)
 #endif
     !
+    FACHF  = 5.
+#ifdef W3_ST1
+    FACHF  = 4.5
+#endif
+    !
 #ifdef W3_NL1
     LAMBDA =  0.25
     IF ( FLTC96 ) THEN
@@ -1924,24 +1929,6 @@ CONTAINS
     NLTAIL = TAILNL
 #endif
     !
-#ifdef W3_ST0
-    FACHF  = 5.
-#endif
-#ifdef W3_ST1
-    FACHF  = 4.5
-#endif
-#ifdef W3_ST2
-    FACHF  = 5.
-#endif
-#ifdef W3_ST3
-    FACHF  = 5.
-#endif
-#ifdef W3_ST4
-    FACHF  = 5.
-#endif
-#ifdef W3_ST6
-    FACHF  = 5.
-#endif
 #ifdef W3_NL2
     IQTYPE =  2
     TAILNL = -FACHF
