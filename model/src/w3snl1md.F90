@@ -37,6 +37,8 @@ MODULE W3SNL1MD
   !/    29-May-2009 : Preparing distribution version.     ( version 3.14 )
   !/    03-Sep-2012 : Clean up of test output T0, T1      ( version 4.07 )
   !/    28-Feb-2023 : Adds GQM separate routines          ( version 7.07 )
+  !/    04-Jul-2025 : Remove labelled statements          ( version X.XX )
+  !/    24-Jan-2026 : Combination of GQM and DIA          ( version X.XX )
   !/
   !/    Copyright 2009 National Weather Service (NWS),
   !/       National Oceanic and Atmospheric Administration.  All rights
@@ -112,7 +114,7 @@ CONTAINS
 !> @date   06-Jun-2018
 !>
 
-  SUBROUTINE W3SNL1 (A, CG, KDMEAN, S, D, U10ABS, EMEAN)
+  SUBROUTINE W3SNL1 (A, CG, KDMEAN, S, D, U10ABS, EMEAN, GQMRATIO)
     !/
     !/                  +-----------------------------------+
     !/                  | WAVEWATCH III           NOAA/NCEP |
@@ -197,37 +199,45 @@ CONTAINS
     !/ Parameter list
     !/
     REAL, INTENT(IN)        :: A(NSPEC), CG(NK), KDMEAN, EMEAN, U10ABS
-    REAL, INTENT(OUT)       :: S(NSPEC), D(NSPEC)
+    REAL, INTENT(OUT)       :: S(NSPEC), D(NSPEC), GQMRATIO
     !/
     !/ ------------------------------------------------------------------- /
     !/ Local parameters
     !/
-    REAL :: VSNLDIA(NSPEC), VDNLDIA(NSPEC)
-    REAL :: VSNLGQM(NSPEC), VDNLGQM(NSPEC)
-    REAL, PARAMETER :: FACTHR2=1.33333
-    REAL :: HS, RAT
-    
+    REAL     :: VSNLDIA(NSPEC), VDNLDIA(NSPEC)
+    REAL     :: VSNLGQM(NSPEC), VDNLGQM(NSPEC)
+    REAL, PARAMETER :: FACTHR2=1.25
+    REAL     :: HS, R1, R2
+    LOGICAL  :: DIA_COMPUTED 
 
+    DIA_COMPUTED = .FALSE.    
     HS=4*SQRT(EMEAN)
-    ! First possibility: uses only DIA
-    IF ((HS.LT.GQMDIA_HS_THR*FACTHR2.AND.U10ABS.LT.GQMDIA_WND_THR*FACTHR2.AND.GQMDIA.LT.2).OR.GQMDIA.EQ.0)  CALL W3SNLDIA (A, CG, KDMEAN, VSNLDIA, VDNLDIA)
+    IF ((HS.LT.GQMDIA_HS_THR*FACTHR2.AND.U10ABS.LT.GQMDIA_WND_THR*FACTHR2.AND.GQMDIA.LT.2).OR.GQMDIA.EQ.0) THEN 
+       CALL W3SNLDIA (A, CG, KDMEAN, VSNLDIA, VDNLDIA)
+       DIA_COMPUTED=.TRUE.
+    END IF
+
+! We now have 3 cases ... 
+
+! 1st case: below threshold, uses DIA
     IF ((HS.LT.GQMDIA_HS_THR.AND.U10ABS.LT.GQMDIA_WND_THR.AND.GQMDIA.LT.2).OR.GQMDIA.EQ.0) THEN 
       S=VSNLDIA
       D=VDNLDIA
-      WRITE(6,*) 'TEST1'
+      GQMRATIO=0
     ELSE 
       CALL W3SNLGQM (A, CG, KDMEAN, VSNLGQM, VDNLGQM)
-      IF (HS.GT.GQMDIA_HS_THR*FACTHR2.OR.U10ABS.GT.GQMDIA_WND_THR*FACTHR2.OR.GQMDIA.EQ.2) THEN 
-    ! Second possibility: uses only GQM
+      IF ((HS.LT.GQMDIA_HS_THR*FACTHR2.AND.U10ABS.LT.GQMDIA_WND_THR*FACTHR2).AND. (DIA_COMPUTED) ) THEN 
+! 2nd case: around threshold: combines DIA and GQM 
+        R1=(HS    -GQMDIA_HS_THR )/(GQMDIA_HS_THR *(FACTHR2-1))
+        R2=(U10ABS-GQMDIA_WND_THR)/(GQMDIA_WND_THR*(FACTHR2-1))
+        GQMRATIO=MIN(1.,MAX(0.,MAX(R1,R2)))
+        S=VSNLDIA*(1-GQMRATIO)+VSNLGQM*GQMRATIO
+        D=VDNLDIA*(1-GQMRATIO)+VDNLGQM*GQMRATIO
+      ELSE
+! 3rd case: above threshold, uses GQM
         S=VSNLGQM
         D=VDNLGQM
-        WRITE(6,*) 'TEST2'
-      ELSE
-    ! Third possibility: combines DIA and GQM
-        RAT=(HS-GQMDIA_HS_THR)/(GQMDIA_HS_THR*(FACTHR2-1))*(U10ABS-GQMDIA_WND_THR)/(GQMDIA_WND_THR*(FACTHR2-1))
-        S=VSNLDIA*(1-RAT)+VSNLGQM*RAT
-        D=VDNLDIA*(1-RAT)+VDNLGQM*RAT
-        WRITE(6,*) 'TEST3'
+        GQMRATIO=1
       ENDIF
     ENDIF   
   END SUBROUTINE W3SNL1
@@ -397,7 +407,7 @@ CONTAINS
     USE CONSTANTS
     USE W3GDATMD, ONLY: NK, NTH, NSPEC, SIG, FACHFE,                &
          KDCON, KDMN, SNLC1, SNLS1, SNLS2, SNLS3
-    USE W3ADATMD, ONLY: NFR, NFRHGH, NFRCHG, NSPECX, NSPECY,        &
+    USE W3ADATMD, ONLY: NFR, NFRHGH, NSPECX, NSPECY,        &
          IP11, IP12, IP13, IP14, IM11, IM12, IM13, IM14,   &
          IP21, IP22, IP23, IP24, IM21, IM22, IM23, IM24,   &
          IC11, IC12, IC21, IC22, IC31, IC32, IC41, IC42,   &
@@ -468,7 +478,6 @@ CONTAINS
     !
     ! 2.  Prepare auxiliary spectrum and arrays -------------------------- *
     !
-
     DO IFR=1, NFR
       CONX = TPIINV / SIG(IFR) * CG(IFR)
       DO ITH=1, NTH
@@ -946,7 +955,7 @@ CONTAINS
     !==================================================================================
     !     This subroutine is same as qnlin3 in TOMWAC
     USE CONSTANTS, ONLY: TPI
-    USE W3GDATMD,  ONLY: SIG, NK ,  NTH , DTH, XFR, FR1, GQTHRSAT, GQAMP
+    USE W3GDATMD,  ONLY: SIG, NK ,  NTH , DTH, XFR, FR1, GQTHRSAT, GQFRESAT, GQAMP
 
     IMPLICIT NONE
 
@@ -963,7 +972,7 @@ CONTAINS
     !.....LOCAL VARIABLES
     INTEGER             JF    , JT    , JF1   , JT1  , IQ_OM2 &
          , JFM0  , JFM1  , JFM2  , JFM3  , IXF1 , IXF2   &
-         , IXF3  , JFMIN , JFMAX , ICONF , LBUF
+         , IXF3  , JFMIN , JFMAX , JFMINS, ICONF , LBUF
     INTEGER            KT1P  , KT1M  , JT1P  , JT1M  , KT1P2P, KT1P2M &
          , KT1P3P, KT1P3M, KT1M2P, KT1M2M, KT1M3P, KT1M3M &
          , JT1P2P, JT1P2M, JT1P3P, JT1P3M, JT1M2P, JT1M2M &
@@ -976,8 +985,7 @@ CONTAINS
          , CF3   , CP3   , Q2PD0 , Q2PD1 , Q2PD2P, Q2PD3M &
          , Q2MD0 , Q2MD1 , Q2MD2M, Q2MD3P ,AUX00 , AUX01  &
          , AUX02 , AUX03 , AUX04 , AUX05 , SEUIL  &
-         , AUX06 , AUX07 , AUX08 , AUX09 , AUX10 , FSEUIL
-
+         , AUX06 , AUX07 , AUX08 , AUX09 , AUX10
     NT = NTH
     NF = NK
     LBUF = 500
@@ -1006,7 +1014,7 @@ CONTAINS
     !     JFMAX IS GIVEN BY Fmax=FREQ(NF)*Gamma_max
     !     TESTS HAVE SHOWN THAT IT CAN BE ASSUMED Gamma_min=1. (JFMIN=1) AND
     !     Gamma_max=1.3 (JFMAX>NF) TO OBTAIN IMPROVED RESULTS
-    !     Note by Fabrice Ardhuin: this appears to give the difference in tail benaviour with Gerbrant's WRT
+    !     Note by Fabrice Ardhuin: this appears to give the difference in tail benaviour with the WRT code by Gerbrant van Vledder
     !=======================================================================
     JFMIN=MAX(1-INT(LOG(1.0D0)/LOG(RAISF)),1)
     JFMAX=MIN(NF+INT(LOG(1.3D0)/LOG(RAISF)),NK)
@@ -1028,14 +1036,18 @@ CONTAINS
     TSDER = 0.
     !=======================================================================
     ACCMAX=0.
+    JFMINS=JFMAX
+    
     DO JF=JFMIN,JFMAX
-      SUME=SUM(F(:,JF))*DTH
+      JF1=MIN(JF+NINT(LOG(GQFRESAT)/LOG(XFR)),JFMAX)
+      SUME=SUM(F(:,JF1))*DTH
       SATVAL(JF) = SUME*FREQ(JF)**5
+      IF (SATVAL(JF).GT.GQTHRSAT.AND.JFMINS.EQ.JFMAX) JFMINS=JF
       ACCVAL = SUME*FREQ(JF)**4
       IF (ACCVAL.GT.ACCMAX) ACCMAX=ACCVAL
     END DO
-
-
+    JFMIN=JFMINS
+    
     !     ==================================================
     !     STARTS LOOP 1 OVER THE SELECTED CONFIGURATIONS
     !     ==================================================
@@ -1077,7 +1089,6 @@ CONTAINS
       !       STARTS LOOP 2 OVER THE SPECTRUM FREQUENCIES
       !       = = = = = = = = = = = = = = = = = = = = = = = = =
       DO JF=JFMIN,JFMAX
-        IF (SATVAL(JF).GT.GQTHRSAT) THEN
           !
           !.........Recovers the coefficient for the coupling factor
           !.........Computes the coupling coefficients for the case +Delta1 (SIG=1)
@@ -1269,7 +1280,6 @@ CONTAINS
           !         END OF LOOP 3 OVER THE SPECTRUM DIRECTIONS
           !         -------------------------------------------------
           !
-        ENDIF ! End of test on saturation level
       ENDDO
       !       = = = = = = = = = = = = = = = = = = = = = = = = =
       !       END OF LOOP 2 OVER THE SPECTRUM FREQUENCIES
@@ -1446,18 +1456,19 @@ CONTAINS
     M=(NPOIN+1)/2
     DO I=1,M
       Z=COS(PI*(DBLE(I)-0.25D0)/(DBLE(NPOIN)+0.5D0))
-1     CONTINUE
-      P1=1.0D0
-      P2=0.0D0
-      DO J=1,NPOIN
-        P3=P2
-        P2=P1
-        P1=((2.D0*DBLE(J)-1.D0)*Z*P2-(DBLE(J)-1.D0)*P3)/DBLE(J)
-      ENDDO
-      PP=DBLE(NPOIN)*(Z*P1-P2)/(Z*Z-1.D0)
-      Z1=Z
-      Z=Z-P1/PP
-      IF (ABS(Z-Z1).GT.EPS) GOTO 1
+      DO
+        P1=1.0D0
+        P2=0.0D0
+        DO J=1,NPOIN
+          P3=P2
+          P2=P1
+          P1=((2.D0*DBLE(J)-1.D0)*Z*P2-(DBLE(J)-1.D0)*P3)/DBLE(J)
+        ENDDO
+        PP=DBLE(NPOIN)*(Z*P1-P2)/(Z*Z-1.D0)
+        Z1=Z
+        Z=Z-P1/PP
+        IF (ABS(Z-Z1).LE.EPS) EXIT
+      END DO
       X_LEG(I)=-Z
       X_LEG(NPOIN+1-I)=Z
       W_LEG(I)=2.D0/((1.D0-Z**2)*PP**2)
@@ -1676,10 +1687,10 @@ CONTAINS
     !/ ------------------------------------------------------------------- /
     USE CONSTANTS, ONLY: GRAV
     USE W3GDATMD,  ONLY: NK , NTH , XFR , FR1, GQNF1, GQNT1, GQNQ_OM2, NLTAIL, GQTHRCOU
-
 #ifdef W3_S
-    CALL STRACE (IENT, 'INSNLGQM')
+    USE W3SERVMD, ONLY: STRACE
 #endif
+
     IMPLICIT NONE
     !.....LOCAL VARIABLES
     INTEGER           JF    , JT    , JF1   , JT1   , NF1P1 , IAUX , NT , NF , IK
@@ -1693,7 +1704,7 @@ CONTAINS
     DOUBLE PRECISION  RK2   , XK2P  , YK2P  , XK2M  , YK2M
     DOUBLE PRECISION  RK3   , XK3P  , YK3P  , XK3M  , YK3M
     DOUBLE PRECISION  D01P  , C_D01P, S_D01P, D0AP  , C_D0AP, S_D0AP
-    DOUBLE PRECISION  GA2P  , C_GA2P, S_GA2P, GA3P  , C_GA3P, S_GA3P, TWOPI, PI, SEUIL1 , SEUIL2 , SEUIL
+    DOUBLE PRECISION  GA2P  , C_GA2P, S_GA2P, GA3P  , C_GA3P, S_GA3P, TWOPI, PI, SEUIL1 , SEUIL2
     !
     !.....Variables related to the Gaussian quadratures
     DOUBLE PRECISION  W_CHE_TE1, W_CHE_OM2, C_LEG_OM2
@@ -1703,6 +1714,10 @@ CONTAINS
     DOUBLE PRECISION :: FREQ(NK)
     DOUBLE PRECISION, ALLOCATABLE :: F1SF(:) , X_CHE_TE1(:) , X_CHE_OM2(:) , X_LEG_OM2(:) , W_LEG_OM2(:) &
          ,  MAXCLA(:)
+#ifdef W3_S
+    INTEGER, SAVE           :: IENT = 0
+    CALL STRACE (IENT, 'INSNLGQM')
+#endif
 
     PI = Acos(-1.)
     LBUF = 500
@@ -2255,9 +2270,7 @@ CONTAINS
     !
     !..... counts the fraction of the eliminated configurations
     ELIM=(1.D0-DBLE(NCONF)/DBLE(NCONFM))*100.D0
-#ifdef W3_TGQM
-    WRITE(994,*) 'NCONF, ELIM FRACTION:',NCONF,ELIM
-#endif
+    WRITE(*,*) 'GQM, quadruplet configurations:',NCONFM,NCONF,ELIM
   END SUBROUTINE INSNLGQM
   !/
   !/ End of module W3SNL1MD -------------------------------------------- /
