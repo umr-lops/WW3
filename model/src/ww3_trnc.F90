@@ -1002,7 +1002,7 @@ CONTAINS
        IRET=NF90_PUT_ATT(NCID,VARID(9),'scale_factor',1.)
        IRET=NF90_PUT_ATT(NCID,VARID(9),'add_offset',0.)
        IRET=NF90_PUT_ATT(NCID,VARID(9),'valid_min',0.)
-       IRET=NF90_PUT_ATT(NCID,VARID(9),'valid_max',10.)
+       IRET=NF90_PUT_ATT(NCID,VARID(9),'valid_max',1E6)
        IRET=NF90_PUT_ATT(NCID,VARID(9),'_FillValue',NF90_FILL_FLOAT)
     END IF
          
