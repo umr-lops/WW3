@@ -39,7 +39,8 @@ MODULE W3NMLOUNPMD
   ! file structure
   TYPE NML_FILE_T
     CHARACTER(30)               :: PREFIX
-    INTEGER                     :: NETCDF
+    INTEGER                     :: NETCDF,NCDEFLATE
+    REAL                        :: EFTHFSC
   END TYPE NML_FILE_T
 
   ! spectra structure
@@ -413,6 +414,8 @@ CONTAINS
     ! set default values for file structure
     FILE%PREFIX    = 'ww3.'
     FILE%NETCDF    = 3
+    FILE%NCDEFLATE = 1
+    FILE%EFTHFSC   = 0.0004
 
 
     ! read file namelist
@@ -930,10 +933,13 @@ CONTAINS
     WRITE (NDSN,'(A)')
     WRITE (NDSN,10) TRIM(MSG),'PREFIX    = ', TRIM(NML_FILE%PREFIX)
     WRITE (NDSN,11) TRIM(MSG),'NETCDF    = ', NML_FILE%NETCDF
+    WRITE (NDSN,11) TRIM(MSG),'NCDEFLATE = ', NML_FILE%NCDEFLATE
+    WRITE (NDSN,12) TRIM(MSG),'NCDEFLATE = ', NML_FILE%EFTHFSC
 
 
 10  FORMAT (A,2X,A,A)
 11  FORMAT (A,2X,A,I8)
+12  FORMAT (A,2X,A,F10.6)
 
   END SUBROUTINE REPORT_FILE_NML
 

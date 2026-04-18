@@ -32,6 +32,9 @@
 ! * definitions & defaults:
 !     FILE%PREFIX        = 'ww3.'            ! Prefix for output file name
 !     FILE%NETCDF        = 3                 ! Netcdf version [3|4]
+!     FILE%NCDEFLATE     = 1                 ! Compression: 5 is a good value
+!     FILE%EFTHFSC       = 0.0004            ! Scale factor: using 0.004 gives 0.1% accuracy and better compression
+!                                            ! this scale factor only applies if NML_SPECTRA%TYPE <= 3 
 ! -------------------------------------------------------------------- !
 &FILE_NML
   FILE%NETCDF        = 4

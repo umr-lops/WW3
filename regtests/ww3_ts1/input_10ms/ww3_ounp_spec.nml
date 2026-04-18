@@ -18,6 +18,9 @@
 ! Define the content of the output file via FILE_NML namelist
 ! -------------------------------------------------------------------- !
 &FILE_NML
+  FILE%NETCDF        = 4
+  FILE%NCDEFLATE     = 5
+  FILE%EFTHFSC       = 0.004
 /
 
 ! -------------------------------------------------------------------- !
@@ -29,6 +32,7 @@
 ! Define the type 1, spectra via SPECTRA_NML namelist
 ! -------------------------------------------------------------------- !
 &SPECTRA_NML
+  SPECTRA%TYPE =  2
 /
 
 ! -------------------------------------------------------------------- !

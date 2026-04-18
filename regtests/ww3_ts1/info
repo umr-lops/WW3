@@ -22,11 +22,12 @@
 #     + switch_ST1_RWND : WAM 3 physics + wind dorrection.                     #
 #     + switch_ST2      : Tolman and Chalikov (default).                       #
 #     + switch_ST3      : WAM 4 physics.                                       #
-#     + switch_ST4      : Ardhuin et al. (2010), Romero (2019)                 #
+#     + switch_ST4      : Ardhuin &al.(2010)/Filipot&Ardhuin(2012)/Romero(2019)#
 #     + switch_ST6      : BYDRZ physics (2013).                                #
 #                                                                              #
 #  Example run_test commands:                                                  #
 #  (some details will vary by local system and configuration)                  #
+#  ./bin/run_cmake_test -f -N -S -T -o both -g ST4_T707 -w work_T707GQM -i input_10ms -N  ../model ww3_ts1
 #  ./bin/run_test -s ST1  -w work_ST1 ../model ww3_ts1                         #
 #  ./bin/run_test -s ST2  -w work_ST2 ../model ww3_ts1                         #
 #  ./bin/run_test -s ST4 -o netcdf -N -w work_ST4 ../model ww3_ts1             #

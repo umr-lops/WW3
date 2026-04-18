@@ -78,6 +78,7 @@ PROGRAM W3OUNP
   !/    21-Jul-2022 : Correct FP0 calc for peak energy in ( version 7.14 )
   !/                  min/max freq band (B. Pouliot, CMC)
   !/    04-Jul-2025 : Remove labelled statements          ( version X.XX )
+  !/    16-Apr-2026 : Allows NCDEFLATE set in ww3_ounp.nml( version X.XX )
   !/
   !/    Copyright 2009 National Weather Service (NWS),
   !/       National Oceanic and Atmospheric Administration.  All rights
@@ -237,7 +238,7 @@ PROGRAM W3OUNP
        ICODE, STRL, STRL2, FLWW3, NBFILEOUT,&
        S5, S3, NBSTATION, NCTYPE,           &
        NCFLUSH, NFL, MFL, IFL, NREQL, NOUTL,&
-       NDSEN, ONE, TWO, IRET, IP, NCVARTYPE
+       NDSEN, ONE, TWO, IRET, IP, NCVARTYPE, NCDEFLATE
   INTEGER                 :: ISCALE = 0
   INTEGER                 :: DIMID(7), DIMLN(5), VARID(28),       &
        STARTDATE(8), STOPDATE(8),           &
@@ -261,7 +262,7 @@ PROGRAM W3OUNP
   INTEGER, ALLOCATABLE    :: INDREQ(:), INDREQTMP(:)
   INTEGER,ALLOCATABLE     :: NCID(:)
   !
-  REAL                    :: DTREQ, SCALE1, SCALE2, DTEST
+  REAL                    :: DTREQ, SCALE1, SCALE2, DTEST, EFTHFSC
   REAL                    :: M2KM
   REAL                    :: DTHD,RTH0
   !
@@ -461,6 +462,8 @@ PROGRAM W3OUNP
     FLWW3 = 0
     FILEPREFIX = NML_FILE%PREFIX
     NCTYPE = NML_FILE%NETCDF
+    NCDEFLATE = NML_FILE%NCDEFLATE
+    EFTHFSC = NML_FILE%EFTHFSC
     S3 = NML_POINT%TIMESPLIT
     TOGETHER = NML_POINT%SAMEFILE
     MFL = NML_POINT%BUFFER
@@ -579,6 +582,8 @@ PROGRAM W3OUNP
     CALL NEXTLN ( COMSTR , NDSI , NDSE )
     !
     IF (ITYPE .EQ. 1) READ (NDSI,*,IOSTAT=IERR) OTYPE, SCALE1, SCALE2, NCVARTYPE
+    NCDEFLATE=1
+    EFTHFSC=0.0004
     IF (ITYPE .EQ. 2) READ (NDSI,*,IOSTAT=IERR) OTYPE
     IF (ITYPE .EQ. 3) READ (NDSI,*,IOSTAT=IERR) OTYPE, SCALE1, SCALE2, FLSRCE, ISCALE
     IF (IERR.NE.0) CALL EXTIOF(NDSE,IERR,'W3OUNP','INPUT',41)
@@ -877,7 +882,7 @@ PROGRAM W3OUNP
                 DIMLN(2)=NBSTATION         ! station
                 DIMLN(3)=40                ! string station name length
                 DIMLN(4)=NK                ! FREQ
-                CALL W3CRNC(ITYPE,OTYPE,NCTYPE,NCFILE(I),NCID(I),DIMID,DIMLN,VARID,ONE,TWO)
+                CALL W3CRNC(ITYPE,OTYPE,NCTYPE,NCDEFLATE,EFTHFSC,NCFILE(I),NCID(I),DIMID,DIMLN,VARID,ONE,TWO)
               END IF
             END DO
 
@@ -892,7 +897,7 @@ PROGRAM W3OUNP
                 DIMLN(3)=40 ! string station name length
                 DIMLN(4)=NK ! FREQ
                 DIMLN(5)=NTH ! DIR
-                CALL W3CRNC(ITYPE,OTYPE,NCTYPE,NCFILE(I),NCID(I),DIMID,DIMLN,VARID,ONE,TWO,NCVARTYPE=NCVARTYPE)
+                CALL W3CRNC(ITYPE,OTYPE,NCTYPE,NCDEFLATE,EFTHFSC,NCFILE(I),NCID(I),DIMID,DIMLN,VARID,ONE,TWO,NCVARTYPE=NCVARTYPE)
               END IF
             END DO
 
@@ -906,7 +911,7 @@ PROGRAM W3OUNP
                 DIMLN(2)=NBSTATION ! station
                 DIMLN(3)=40    ! string station name length
                 DIMLN(4)=DIMXP ! npart
-                CALL W3CRNC(ITYPE,OTYPE,NCTYPE,NCFILE(I),NCID(I),DIMID,DIMLN,VARID,ONE,TWO)
+                CALL W3CRNC(ITYPE,OTYPE,NCTYPE,NCDEFLATE,EFTHFSC,NCFILE(I),NCID(I),DIMID,DIMLN,VARID,ONE,TWO)
               END IF
             END DO
           ELSE
@@ -925,7 +930,7 @@ PROGRAM W3OUNP
               DIMLN(1)=NF90_UNLIMITED  !time
               DIMLN(2)=NBSTATION ! station
               DIMLN(3)=40    ! string station name length
-              CALL W3CRNC(ITYPE,OTYPE,NCTYPE,NCFILE(I),NCID(I),DIMID,DIMLN,VARID,ONE,TWO)
+              CALL W3CRNC(ITYPE,OTYPE,NCTYPE,NCDEFLATE,EFTHFSC,NCFILE(I),NCID(I),DIMID,DIMLN,VARID,ONE,TWO)
             END IF
           END DO
 
@@ -1011,7 +1016,7 @@ PROGRAM W3OUNP
                 DIMLN(2)=NBSTATION ! station
                 DIMLN(3)=40    ! string station name length
                 DIMLN(4)=NK ! freq
-                CALL W3CRNC(ITYPE,OTYPE,NCTYPE,NCFILE(I),NCID(I),DIMID,DIMLN,VARID,ONE,TWO)
+                CALL W3CRNC(ITYPE,OTYPE,NCTYPE,NCDEFLATE,EFTHFSC,NCFILE(I),NCID(I),DIMID,DIMLN,VARID,ONE,TWO)
               END IF
             END DO
 
@@ -1026,7 +1031,7 @@ PROGRAM W3OUNP
                 DIMLN(3)=40    ! string station name length
                 DIMLN(4)=NK ! freq
                 DIMLN(5)=NTH ! dir
-                CALL W3CRNC(ITYPE,OTYPE,NCTYPE,NCFILE(I),NCID(I),DIMID,DIMLN,VARID,ONE,TWO,FLSRCE=FLSRCE)
+                CALL W3CRNC(ITYPE,OTYPE,NCTYPE,NCDEFLATE,EFTHFSC,NCFILE(I),NCID(I),DIMID,DIMLN,VARID,ONE,TWO,FLSRCE=FLSRCE)
               END IF
             END DO
 
@@ -1142,11 +1147,11 @@ PROGRAM W3OUNP
             IF (FLREQ(I) .OR. TOGETHER) THEN
               ! together
               IF ( TOGETHER ) THEN
-                CALL W3EXNC(I,NCID(I),NREQ,INDREQ,ORDER)
+                CALL W3EXNC(I,NCID(I),NREQ,INDREQ,ORDER,NCDEFLATE,EFTHFSC)
                 ! not together
               ELSE
                 J=J+1
-                CALL W3EXNC(I,NCID(I),1,(/ I /),ORDER)
+                CALL W3EXNC(I,NCID(I),1,(/ I /),ORDER,NCDEFLATE,EFTHFSC)
                 ! flush buffer (only available in netcdf3)
                 IF (MOD(IOUT,NCFLUSH).EQ.0) THEN
                   IRET=NF90_SYNC(NCID(I))
@@ -1428,7 +1433,7 @@ CONTAINS
   !> @author M. Accensi
   !> @date 14-Mar-2013
   !>
-  SUBROUTINE W3EXNC(I,NCID,NREQ,INDREQ,ORDER)
+  SUBROUTINE W3EXNC(I,NCID,NREQ,INDREQ,ORDER,NCDEFLATE,EFTHFSC)
     !/
     !/                  +-----------------------------------+
     !/                  | WAVEWATCH III           NOAA/NCEP |
@@ -1596,7 +1601,8 @@ CONTAINS
     !/
     !/ ------------------------------------------------------------------- /
 
-    INTEGER, INTENT(IN)     :: I, NCID, NREQ, INDREQ(NREQ)
+    INTEGER, INTENT(IN)     :: I, NCID, NREQ, INDREQ(NREQ),NCDEFLATE
+    REAL   , INTENT(IN)     :: EFTHFSC
     LOGICAL, INTENT(IN)     :: ORDER
 
 
@@ -1626,7 +1632,7 @@ CONTAINS
 #endif
     REAL                    :: WN_R(NK),CG_ICE(NK), ALPHA_LIU(NK),   &
          R(NK), WN(NK), CG(NK), APM(NK),       &
-         E3(NTH,NK,NREQ), E(NK,NTH), E1(NK),   &
+         E3(NTH,NK,NREQ), E2(NK,NTH), E(NK,NTH), E1(NK),   &
          THBND(NK), SPBND(NK), A(NTH,NK),      &
          WN2(NTH,NK),                          &
          STT(NK,NTH), SWN(NK,NTH), SNL(NK,NTH),&
@@ -1692,8 +1698,6 @@ CONTAINS
     DATA VAR1   / 'Sin ' , 'Snl ', 'Sds ' , 'Sbt ' , 'Sice', 'Stot' /
     REAL                   :: GQMRATIO
 
-
-
     !/
     !/ ------------------------------------------------------------------- /
     !/
@@ -1714,6 +1718,7 @@ CONTAINS
     XL2    = XL**2
     XH2    = XH**2
     GQMRATIO=0
+
     !
     IF ( ITYPE .EQ. 3 ) THEN
       XLN = 0.
@@ -1872,7 +1877,8 @@ CONTAINS
       END IF
       !
       IF (NCVARTYPE.LE.3) THEN
-        WHERE(E3(:,:,:).GE.0) E3(:,:,:)=NINT(ALOG10(E3(:,:,:)+1E-12)/0.0004)
+      ! Uses scale factors when defined in namelist ... 
+        WHERE(E3(:,:,:).GE.0) E3(:,:,:)=NINT(ALOG10(E3(:,:,:)+1E-12)/EFTHFSC)
       END IF
       IF(ORDER) IRET=NF90_PUT_VAR(NCID,VARID(10),E3(1:NTH,1:NK,:), &
            start=(/1,1,1,IOUT/),count=(/NTH,NK,NREQ,1/))
@@ -3064,7 +3070,7 @@ CONTAINS
   !> @param[in] NCVARTYPE
   !>
   !> @author NA  @date NA
-  SUBROUTINE W3CRNC (ITYPE, OTYPE, NCTYPE, NCFILE, NCID, DIMID, DIMLN, VARID, ONE, TWO, FLSRCE, NCVARTYPE)
+  SUBROUTINE W3CRNC (ITYPE, OTYPE, NCTYPE,NCDEFLATE,EFTHFSC, NCFILE, NCID, DIMID, DIMLN, VARID, ONE, TWO, FLSRCE, NCVARTYPE)
 
 
     USE W3GDATMD
@@ -3073,9 +3079,10 @@ CONTAINS
     implicit none
 
 
-    INTEGER, INTENT(IN)               :: ITYPE,OTYPE,NCTYPE, ONE, TWO
+    INTEGER, INTENT(IN)               :: ITYPE,OTYPE,NCTYPE,NCDEFLATE, ONE, TWO
     CHARACTER*(128), INTENT(IN)       :: NCFILE
     INTEGER, INTENT(IN)               :: DIMLN(5)
+    REAL   , INTENT(IN)               :: EFTHFSC
     INTEGER, INTENT(OUT)              :: DIMID(7), VARID(28),NCID
     LOGICAL, INTENT(IN), OPTIONAL     :: FLSRCE(7)
     INTEGER, INTENT(IN), OPTIONAL     :: NCVARTYPE
@@ -3085,7 +3092,9 @@ CONTAINS
     INTEGER                             :: DEFLATE=1
     !
     REAL(kind=4)                      :: FREQ(NK), FREQ1(NK),FREQ2(NK), DIR(NTH)
+    INTEGER                           :: chunks(4)
 
+    chunks = (/DIMLN(5),DIMLN(4), 1, 1 /)
 
     !
     ! Creation in netCDF3 or netCDF4
@@ -3519,7 +3528,10 @@ CONTAINS
         IRET=NF90_DEF_VAR(NCID,'efth',NF90_FLOAT,(/DIMID(5),DIMID(4),DIMID(TWO),DIMID(ONE)/),VARID(10))
       END IF
       CALL CHECK_ERR(IRET,42)
-      IF (NCTYPE.EQ.4) IRET=NF90_DEF_VAR_DEFLATE(NCID, VARID(10), 1, 1, DEFLATE)
+      IF (NCTYPE.EQ.4) THEN 
+        IRET=NF90_DEF_VAR_DEFLATE(NCID, VARID(10), 1, 1, NCDEFLATE)
+        IRET = NF90_DEF_VAR_CHUNKING(NCID, VARID(10), NF90_CHUNKED, chunks)
+      END IF
       IRET=NF90_PUT_ATT(NCID,VARID(10),'long_name',&
            'sea surface wave directional variance spectral density')
       IF (NCVARTYPE.LE.3) THEN
@@ -3527,7 +3539,7 @@ CONTAINS
              'base_ten_logarithm_of_sea_surface_wave_directional_variance_spectral_density')
         IRET=NF90_PUT_ATT(NCID,VARID(10),'globwave_name','directional_variance_spectral_density')
         IRET=NF90_PUT_ATT(NCID,VARID(10),'units','log10(m2 s rad-1 +1E-12)')
-        IRET=NF90_PUT_ATT(NCID,VARID(10),'scale_factor',0.0004)
+        IRET=NF90_PUT_ATT(NCID,VARID(10),'scale_factor',EFTHFSC)
         IRET=NF90_PUT_ATT(NCID,VARID(10),'add_offset',0.)
         IRET=NF90_PUT_ATT(NCID,VARID(10),'valid_min',0.)
         IRET=NF90_PUT_ATT(NCID,VARID(10),'valid_max',1.E20)
@@ -5379,7 +5391,7 @@ CONTAINS
       IF ( PRESENT(FLSRCE) ) THEN
         IF ( FLSRCE(1) )  THEN
           IRET=NF90_DEF_VAR(NCID,'efth',NF90_FLOAT,(/DIMID(5),DIMID(4),DIMID(TWO),DIMID(ONE)/),VARID(16))
-          IF (NCTYPE.EQ.4) IRET=NF90_DEF_VAR_DEFLATE(NCID, VARID(16), 1, 1, DEFLATE)
+          IF (NCTYPE.EQ.4) IRET=NF90_DEF_VAR_DEFLATE(NCID, VARID(16), 1, 1, NCDEFLATE)
           IRET=NF90_PUT_ATT(NCID,VARID(16),'long_name',&
                'sea surface wave directional variance spectral density')
           IRET=NF90_PUT_ATT(NCID,VARID(16),'standard_name',&
@@ -5405,7 +5417,7 @@ CONTAINS
         !Swn
         IF ( FLSRCE(2) )  THEN
           IRET=NF90_DEF_VAR(NCID,'sin',NF90_FLOAT,(/DIMID(5),DIMID(4),DIMID(TWO),DIMID(ONE)/),VARID(17))
-          IF (NCTYPE.EQ.4) IRET=NF90_DEF_VAR_DEFLATE(NCID, VARID(17), 1, 1, DEFLATE)
+          IF (NCTYPE.EQ.4) IRET=NF90_DEF_VAR_DEFLATE(NCID, VARID(17), 1, 1, NCDEFLATE)
           IRET=NF90_PUT_ATT(NCID,VARID(17),'long_name','wind input source term')
           IRET=NF90_PUT_ATT(NCID,VARID(17),'standard_name','wind_input_source_term')
           IRET=NF90_PUT_ATT(NCID,VARID(17),'globwave_name','wind_input_source_term')
@@ -5425,7 +5437,7 @@ CONTAINS
         !Snl
         IF ( FLSRCE(3) )  THEN
           IRET=NF90_DEF_VAR(NCID,'snl',NF90_FLOAT,(/DIMID(5),DIMID(4),DIMID(TWO),DIMID(ONE)/),VARID(18))
-          IF (NCTYPE.EQ.4) IRET=NF90_DEF_VAR_DEFLATE(NCID, VARID(18), 1, 1, DEFLATE)
+          IF (NCTYPE.EQ.4) IRET=NF90_DEF_VAR_DEFLATE(NCID, VARID(18), 1, 1, NCDEFLATE)
           IRET=NF90_PUT_ATT(NCID,VARID(18),'long_name','nonlinear 4 wave source term')
           IRET=NF90_PUT_ATT(NCID,VARID(18),'standard_name','nonlinear_4_wave_source_term')
           IRET=NF90_PUT_ATT(NCID,VARID(18),'globwave_name','nonlinear_4_wave_source_term')
@@ -5445,7 +5457,7 @@ CONTAINS
         !Sds
         IF ( FLSRCE(4) )  THEN
           IRET=NF90_DEF_VAR(NCID,'sds',NF90_FLOAT,(/DIMID(5),DIMID(4),DIMID(TWO),DIMID(ONE)/),VARID(19))
-          IF (NCTYPE.EQ.4) IRET=NF90_DEF_VAR_DEFLATE(NCID, VARID(19), 1, 1, DEFLATE)
+          IF (NCTYPE.EQ.4) IRET=NF90_DEF_VAR_DEFLATE(NCID, VARID(19), 1, 1, NCDEFLATE)
           IRET=NF90_PUT_ATT(NCID,VARID(19),'long_name','wave breaking source term')
           IRET=NF90_PUT_ATT(NCID,VARID(19),'standard_name','wave_breaking_source_term')
           IRET=NF90_PUT_ATT(NCID,VARID(19),'globwave_name','wave_breaking_source_term')
@@ -5465,7 +5477,7 @@ CONTAINS
         !Sbt
         IF ( FLSRCE(5) )  THEN
           IRET=NF90_DEF_VAR(NCID,'sbt',NF90_FLOAT,(/DIMID(5),DIMID(4),DIMID(TWO),DIMID(ONE)/),VARID(20))
-          IF (NCTYPE.EQ.4) IRET=NF90_DEF_VAR_DEFLATE(NCID, VARID(20), 1, 1, DEFLATE)
+          IF (NCTYPE.EQ.4) IRET=NF90_DEF_VAR_DEFLATE(NCID, VARID(20), 1, 1, NCDEFLATE)
           IRET=NF90_PUT_ATT(NCID,VARID(20),'long_name','depth induced breaking source term')
           IRET=NF90_PUT_ATT(NCID,VARID(20),'standard_name','depth_induced_breaking_source_term')
           IRET=NF90_PUT_ATT(NCID,VARID(20),'globwave_name','depth_induced_breaking_source_term')
@@ -5485,7 +5497,7 @@ CONTAINS
         !Sice
         IF ( FLSRCE(6) )  THEN
           IRET=NF90_DEF_VAR(NCID,'sice',NF90_FLOAT,(/DIMID(5),DIMID(4),DIMID(TWO),DIMID(ONE)/),VARID(21))
-          IF (NCTYPE.EQ.4) IRET=NF90_DEF_VAR_DEFLATE(NCID, VARID(21), 1, 1, DEFLATE)
+          IF (NCTYPE.EQ.4) IRET=NF90_DEF_VAR_DEFLATE(NCID, VARID(21), 1, 1, NCDEFLATE)
           IRET=NF90_PUT_ATT(NCID,VARID(21),'long_name','wave-ice interactions source term')
           IRET=NF90_PUT_ATT(NCID,VARID(21),'standard_name','wave_ice_intercations_source_term')
           IRET=NF90_PUT_ATT(NCID,VARID(21),'globwave_name','wave_ice_intercations_source_term')
@@ -5505,7 +5517,7 @@ CONTAINS
         !Stt
         IF ( FLSRCE(7) )  THEN
           IRET=NF90_DEF_VAR(NCID,'stt',NF90_FLOAT,(/DIMID(5),DIMID(4),DIMID(TWO),DIMID(ONE)/),VARID(22))
-          IF (NCTYPE.EQ.4) IRET=NF90_DEF_VAR_DEFLATE(NCID, VARID(22), 1, 1, DEFLATE)
+          IF (NCTYPE.EQ.4) IRET=NF90_DEF_VAR_DEFLATE(NCID, VARID(22), 1, 1, NCDEFLATE)
           IRET=NF90_PUT_ATT(NCID,VARID(22),'long_name','total source term')
           IRET=NF90_PUT_ATT(NCID,VARID(22),'standard_name','total_source_term')
           IRET=NF90_PUT_ATT(NCID,VARID(22),'globwave_name','total_source_term')
