@@ -3538,7 +3538,7 @@ CONTAINS
         IRET=NF90_PUT_ATT(NCID,VARID(10),'standard_name',&
              'base_ten_logarithm_of_sea_surface_wave_directional_variance_spectral_density')
         IRET=NF90_PUT_ATT(NCID,VARID(10),'globwave_name','directional_variance_spectral_density')
-        IRET=NF90_PUT_ATT(NCID,VARID(10),'units','log10(m2 s rad-1 +1E-12)')
+        IRET=NF90_PUT_ATT(NCID,VARID(10),'units','log10(m2 s rad-1+1E-12)')
         IRET=NF90_PUT_ATT(NCID,VARID(10),'scale_factor',EFTHFSC)
         IRET=NF90_PUT_ATT(NCID,VARID(10),'add_offset',0.)
         IRET=NF90_PUT_ATT(NCID,VARID(10),'valid_min',0.)
