@@ -88,7 +88,7 @@ MODULE W3IOGRMD
   !/
   !/ Private parameter statements (ID strings)
   !/
-  CHARACTER(LEN=10), PARAMETER, PRIVATE :: VERGRD = '2021-08-06'
+  CHARACTER(LEN=10), PARAMETER, PRIVATE :: VERGRD = '2024-11-25'
   CHARACTER(LEN=35), PARAMETER, PRIVATE ::                        &
        IDSTR = 'WAVEWATCH III MODEL DEFINITION FILE'
   !/
@@ -331,11 +331,8 @@ CONTAINS
     !/ ------------------------------------------------------------------- /
     !/ Local parameters
     !/
-    INTEGER                 :: IGRD, IERR, I, J, MTH, MK, ISEA, IX, IY
+    INTEGER                 :: IGRD, IERR, I, MTH, MK, IX, IY
     INTEGER                 :: IEXT, IPRE
-#ifdef W3_ST4
-    INTEGER                 :: IK, ITH, IK2, ITH2
-#endif
     INTEGER, ALLOCATABLE    :: MAPTMP(:,:)
 #ifdef W3_MPI
     INTEGER                 :: IERR_MPI, IP
@@ -344,12 +341,22 @@ CONTAINS
     INTEGER, SAVE           :: IENT = 0
 #endif
 #ifdef W3_T
-    INTEGER                 :: K
+    INTEGER                 :: K, ISEA
 #endif
-    LOGICAL                 :: WRITE, FLTEST = .FALSE., TESTLL,     &
-         FLSNL2 = .FALSE.
-    LOGICAL, SAVE           :: FLINP = .FALSE. , FLDISP = .FALSE.,  &
-         FLIS  = .FALSE.
+#if defined(W3_T) || defined(W3_SMC)
+    INTEGER                 :: J
+#endif
+    LOGICAL                 :: WRITE, FLTEST = .FALSE.
+#if defined(W3_NL2) || defined(W3_MPI)
+    LOGICAL                 :: FLSNL2 = .FALSE.
+#endif
+    LOGICAL, SAVE           :: FLDISP = .FALSE.
+#if defined(W3_ST2) || defined(W3_ST3)
+    LOGICAL, SAVE           :: FLINP = .FALSE.
+#endif
+#ifdef W3_IS2
+    LOGICAL, SAVE           :: FLIS  = .FALSE.
+#endif
     CHARACTER(LEN=10)       :: VERTST
     CHARACTER(LEN=13)       :: TEMPXT
     CHARACTER(LEN=30)       :: TNAME0, TNAME1, TNAME2, TNAME3,      &
@@ -360,7 +367,6 @@ CONTAINS
          FNAMEP, FNAMEG, FNAMEF, FNAMEI
     CHARACTER(LEN=35)       :: IDTST
     CHARACTER(LEN=60)       :: MESSAGE(5)
-    LOGICAL                 :: GLOBAL
 
     REAL, ALLOCATABLE       :: XGRD4(:,:), YGRD4(:,:)
 
@@ -1346,7 +1352,7 @@ CONTAINS
       IF (IERR.NE.0) CALL EXTIOF(NDSE,IERR,'W3IOGR','mod_def.'//FILEXT(:IEXT),51)
 #endif
 #ifdef W3_WCOR
-      READ  (NDSM,,IOSTAT=IERR) WWCOR
+      READ  (NDSM,IOSTAT=IERR) WWCOR
       IF (IERR.NE.0) CALL EXTIOF(NDSE,IERR,'W3IOGR','mod_def.'//FILEXT(:IEXT),51)
 #endif
 #ifdef W3_REF1
@@ -1613,20 +1619,24 @@ CONTAINS
     IF ( WRITE ) THEN
       WRITE (NDSM) SIN6A0, SDS6ET, SDS6A1, SDS6A2,           &
            SDS6P1, SDS6P2, SWL6S6, SWL6B1, SWL6CSTB1,        &
-           SIN6WS, SIN6FC
+           SIN6WS, SIN6FC, SIN6CHKMIN, SIN6CHKINF,           &
+           SIN6CHKCAP, SIN6CHKSIG, SIN6FLCAP
 #ifdef W3_ASCII
       WRITE (NDSA,*) 'SIN6A0, SDS6ET, SDS6A1, SDS6A2,        &
            SDS6P1, SDS6P2, SWL6S6, SWL6B1, SWL6CSTB1,        &
-           SIN6WS, SIN6FC:',                                 &
+           SIN6WS, SIN6FC, SIN6CHKMIN, SIN6CHKINF,           &
+           SIN6CHKCAP, SIN6CHKSIG, SIN6FLCAP:',              &
                    SIN6A0, SDS6ET, SDS6A1, SDS6A2,           &
            SDS6P1, SDS6P2, SWL6S6, SWL6B1, SWL6CSTB1,        &
-           SIN6WS, SIN6FC
+           SIN6WS, SIN6FC, SIN6CHKMIN, SIN6CHKINF,
+           SIN6CHKCAP, SIN6CHKSIG, SIN6FLCAP
 #endif
     ELSE
       READ (NDSM,IOSTAT=IERR)                                &
            SIN6A0, SDS6ET, SDS6A1, SDS6A2,                   &
            SDS6P1, SDS6P2, SWL6S6, SWL6B1, SWL6CSTB1,        &
-           SIN6WS, SIN6FC
+           SIN6WS, SIN6FC, SIN6CHKMIN, SIN6CHKINF,           &
+           SIN6CHKCAP, SIN6CHKSIG, SIN6FLCAP
       IF (IERR.NE.0) CALL EXTIOF(NDSE,IERR,'W3IOGR','mod_def.'//FILEXT(:IEXT),51)
     END IF
 #endif
@@ -1974,27 +1984,27 @@ CONTAINS
     !
 #ifdef W3_FLD1
     IF ( WRITE ) THEN
-      WRITE (NDSM)  TAIL_ID, TAIL_LEV, TAIL_TRAN1, TAIL_TRAN2
+      WRITE (NDSM)  TAIL_ID, TAIL_LEV, TAIL_TRAN1, TAIL_TRAN2, FLDALPHA
 #ifdef W3_ASCII
-      WRITE (NDSA,*)  'TAIL_ID, TAIL_LEV, TAIL_TRAN1, TAIL_TRAN2:', &
-                    TAIL_ID, TAIL_LEV, TAIL_TRAN1, TAIL_TRAN2
+      WRITE (NDSA,*)  'TAIL_ID, TAIL_LEV, TAIL_TRAN1, TAIL_TRAN2, FLDALPHA:', &
+                    TAIL_ID, TAIL_LEV, TAIL_TRAN1, TAIL_TRAN2, FLDALPHA
 #endif
     ELSE
       READ (NDSM,IOSTAT=IERR) &
-           TAIL_ID, TAIL_LEV, TAIL_TRAN1, TAIL_TRAN2
+           TAIL_ID, TAIL_LEV, TAIL_TRAN1, TAIL_TRAN2, FLDALPHA
       IF (IERR.NE.0) CALL EXTIOF(NDSE,IERR,'W3IOGR','mod_def.'//FILEXT(:IEXT),51)
     END IF
 #endif
 #ifdef W3_FLD2
     IF ( WRITE ) THEN
-      WRITE (NDSM) TAIL_ID, TAIL_LEV, TAIL_TRAN1, TAIL_TRAN2
+      WRITE (NDSM) TAIL_ID, TAIL_LEV, TAIL_TRAN1, TAIL_TRAN2, FLDALPHA
 #ifdef W3_ASCII
-      WRITE (NDSA,*) 'TAIL_ID, TAIL_LEV, TAIL_TRAN1, TAIL_TRAN2:', &
-                   TAIL_ID, TAIL_LEV, TAIL_TRAN1, TAIL_TRAN2
+      WRITE (NDSA,*) 'TAIL_ID, TAIL_LEV, TAIL_TRAN1, TAIL_TRAN2, FLDALPHA:', &
+                   TAIL_ID, TAIL_LEV, TAIL_TRAN1, TAIL_TRAN2, FLDALPHA
 #endif
     ELSE
       READ (NDSM,IOSTAT=IERR) &
-           TAIL_ID, TAIL_LEV, TAIL_TRAN1, TAIL_TRAN2
+           TAIL_ID, TAIL_LEV, TAIL_TRAN1, TAIL_TRAN2, FLDALPHA
       IF (IERR.NE.0) CALL EXTIOF(NDSE,IERR,'W3IOGR','mod_def.'//FILEXT(:IEXT),51)
     END IF
 #endif
